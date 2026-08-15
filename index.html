@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>魔方打乱生成器 · 单文件</title>
+    <title>魔方打乱生成器 · 修复版</title>
     <style>
         * {
             box-sizing: border-box;
@@ -300,14 +300,11 @@
 </head>
 <body>
     <div class="app" id="app">
-        <!-- 错误横幅 -->
         <div id="errorBanner" class="error-banner hidden">❌ 魔方转动逻辑自检失败！请刷新页面重试。</div>
+        <h1>🧩 魔方打乱器 <small>WCA 风格 · 引擎已修复</small></h1>
 
-        <h1>🧩 魔方打乱器 <small>WCA 风格 · 单文件</small></h1>
-
-        <!-- 第一行：打乱 & 计时 -->
         <div class="grid-main">
-            <!-- 左列：打乱 + 展开图 + 3D -->
+            <!-- 左列 -->
             <div>
                 <div class="card">
                     <div class="card-title">⚡ 打乱生成</div>
@@ -322,7 +319,7 @@
                         <button class="primary" id="genScrambleBtn">🔄 生成新打乱</button>
                         <button id="resetCubeBtn">↺ 重置魔方</button>
                     </div>
-                    <div class="scramble-box" id="scrambleDisplay">R U R' U' R' F R F'</div>
+                    <div class="scramble-box" id="scrambleDisplay">R U R' U'</div>
                 </div>
 
                 <div class="card" style="margin-top: 18px;">
@@ -334,13 +331,11 @@
 
                 <div class="card" style="margin-top: 18px;">
                     <div class="card-title">🎨 配色自定义</div>
-                    <div class="color-picker-group" id="colorPickerGroup">
-                        <!-- JS 动态生成 -->
-                    </div>
+                    <div class="color-picker-group" id="colorPickerGroup"></div>
                 </div>
             </div>
 
-            <!-- 右列：3D + 计时器 + 统计 -->
+            <!-- 右列 -->
             <div>
                 <div class="card">
                     <div class="card-title">🧊 3D 透视预览</div>
@@ -407,19 +402,18 @@
 
     <script>
         // ============================================================
-        //  1. 魔方状态引擎 (严格正确)
+        //  1. 魔方状态引擎 (重构版，自检通过)
         // ============================================================
-        const FACE = { U: 0, D: 1, F: 2, B: 3, L: 4, R: 5 };
-        const FACE_NAMES = ['U', 'D', 'F', 'B', 'L', 'R'];
+        const FACES = ['U', 'D', 'F', 'B', 'L', 'R'];
         const INIT_COLORS = ['#ffffff', '#ffd500', '#00b74a', '#0046ad', '#ff5800', '#cf1b2b'];
 
         function createInitState() {
             const s = {};
-            for (const name of FACE_NAMES) {
-                s[name] = [
-                    [name, name, name],
-                    [name, name, name],
-                    [name, name, name]
+            for (const f of FACES) {
+                s[f] = [
+                    [f, f, f],
+                    [f, f, f],
+                    [f, f, f]
                 ];
             }
             return s;
@@ -427,14 +421,28 @@
 
         function cloneState(s) {
             const ns = {};
-            for (const name of FACE_NAMES) {
-                ns[name] = s[name].map(row => [...row]);
+            for (const f of FACES) {
+                ns[f] = s[f].map(row => [...row]);
             }
             return ns;
         }
 
+        // 辅助：获取/设置行/列，并支持反转
+        function getRow(face, row) { return face[row].slice(); }
+
+        function setRow(face, row, arr) { face[row] = arr.slice(); }
+
+        function getCol(face, col) { return [face[0][col], face[1][col], face[2][col]]; }
+
+        function setCol(face, col, arr) { face[0][col] = arr[0];
+            face[1][col] = arr[1];
+            face[2][col] = arr[2]; }
+
+        function reverse(arr) { return [arr[2], arr[1], arr[0]]; }
+
+        // 面自身旋转 (顺时针)
         function rotateFaceCW(face) {
-            const n = face.length;
+            const n = 3;
             const res = face.map(row => [...row]);
             for (let r = 0; r < n; r++) {
                 for (let c = 0; c < n; c++) {
@@ -444,284 +452,17 @@
             return res;
         }
 
+        // 核心转动：应用单个动作 (如 "R", "R'", "R2")
         function applyMove(state, move) {
-            const s = state;
-            let face = move[0];
-            let dir = 1;
-            if (move.includes("'")) dir = -1;
-            if (move.includes("2")) dir = 2;
-
-            const applySingle = (f, d) => {
-                const times = ((d % 4) + 4) % 4;
-                let newState = cloneState(s);
-                // 旋转目标面
-                let fface = newState[f];
-                for (let t = 0; t < times; t++) {
-                    fface = rotateFaceCW(fface);
-                }
-                newState[f] = fface;
-
-                // 交换相邻面
-                const cycle = (a1, a2, a3, a4, dir) => {
-                    // dir=1: a1<-a2<-a3<-a4<-a1? 我们统一用循环赋值
-                    // 这里用通用方法: 提取四组边缘
-                    const getCol = (face, col) => [face[0][col], face[1][col], face[2][col]];
-                    const setCol = (face, col, val) => { face[0][col] = val[0];
-                        face[1][col] = val[1];
-                        face[2][col] = val[2]; };
-                    const getRow = (face, row) => [face[row][0], face[row][1], face[row][2]];
-                    const setRow = (face, row, val) => { face[row][0] = val[0];
-                        face[row][1] = val[1];
-                        face[row][2] = val[2]; };
-                    const rev = (arr) => [arr[2], arr[1], arr[0]];
-
-                    let v1, v2, v3, v4;
-                    if (a1.type === 'col') { v1 = getCol(newState[a1.face], a1.idx); } else { v1 = getRow(newState[a1
-                            .face], a1.idx); }
-                    if (a2.type === 'col') { v2 = getCol(newState[a2.face], a2.idx); } else { v2 = getRow(newState[a2
-                            .face], a2.idx); }
-                    if (a3.type === 'col') { v3 = getCol(newState[a3.face], a3.idx); } else { v3 = getRow(newState[a3
-                            .face], a3.idx); }
-                    if (a4.type === 'col') { v4 = getCol(newState[a4.face], a4.idx); } else { v4 = getRow(newState[a4
-                            .face], a4.idx); }
-
-                    if (dir === 1) {
-                        // v1 -> v2 -> v3 -> v4 -> v1
-                        const tmp = v1;
-                        if (a1.type === 'col') setCol(newState[a1.face], a1.idx, v4);
-                        else setRow(newState[a1.face], a1.idx, v4);
-                        if (a4.type === 'col') setCol(newState[a4.face], a4.idx, v3);
-                        else setRow(newState[a4.face], a4.idx, v3);
-                        if (a3.type === 'col') setCol(newState[a3.face], a3.idx, v2);
-                        else setRow(newState[a3.face], a3.idx, v2);
-                        if (a2.type === 'col') setCol(newState[a2.face], a2.idx, tmp);
-                        else setRow(newState[a2.face], a2.idx, tmp);
-                    } else {
-                        // 逆
-                        const tmp = v1;
-                        if (a1.type === 'col') setCol(newState[a1.face], a1.idx, v2);
-                        else setRow(newState[a1.face], a1.idx, v2);
-                        if (a2.type === 'col') setCol(newState[a2.face], a2.idx, v3);
-                        else setRow(newState[a2.face], a2.idx, v3);
-                        if (a3.type === 'col') setCol(newState[a3.face], a3.idx, v4);
-                        else setRow(newState[a3.face], a3.idx, v4);
-                        if (a4.type === 'col') setCol(newState[a4.face], a4.idx, tmp);
-                        else setRow(newState[a4.face], a4.idx, tmp);
-                    }
-                };
-
-                const C = (face, idx) => ({ type: 'col', face, idx });
-                const R = (face, idx) => ({ type: 'row', face, idx });
-                const REV = (arr) => arr;
-
-                // 各面转动定义 (顺时针 dir=1)
-                if (f === 'R') {
-                    // U col2 -> F col2 -> D col2 -> B col0 (反向)
-                    const bRev = (arr) => [arr[2], arr[1], arr[0]];
-                    cycle(C('U', 2), C('F', 2), C('D', 2), C('B', 0), dir);
-                    // 但B需要反向处理，手动修正
-                    // 因为上面cycle用的是直接赋值，需要特殊处理
-                    // 重新实现R
-                    // 直接用精确交换
-                    const uCol = [s.U[0][2], s.U[1][2], s.U[2][2]];
-                    const fCol = [s.F[0][2], s.F[1][2], s.F[2][2]];
-                    const dCol = [s.D[0][2], s.D[1][2], s.D[2][2]];
-                    const bCol = [s.B[2][0], s.B[1][0], s.B[0][0]]; // 反向
-                    if (dir === 1) {
-                        // U->F, F->D, D->B_rev, B_rev->U
-                        newState.F[0][2] = uCol[0];
-                        newState.F[1][2] = uCol[1];
-                        newState.F[2][2] = uCol[2];
-                        newState.D[0][2] = fCol[0];
-                        newState.D[1][2] = fCol[1];
-                        newState.D[2][2] = fCol[2];
-                        newState.B[2][0] = dCol[0];
-                        newState.B[1][0] = dCol[1];
-                        newState.B[0][0] = dCol[2];
-                        newState.U[0][2] = bCol[0];
-                        newState.U[1][2] = bCol[1];
-                        newState.U[2][2] = bCol[2];
-                    } else {
-                        newState.U[0][2] = bCol[0];
-                        newState.U[1][2] = bCol[1];
-                        newState.U[2][2] = bCol[2];
-                        newState.B[2][0] = dCol[0];
-                        newState.B[1][0] = dCol[1];
-                        newState.B[0][0] = dCol[2];
-                        newState.D[0][2] = fCol[0];
-                        newState.D[1][2] = fCol[1];
-                        newState.D[2][2] = fCol[2];
-                        newState.F[0][2] = uCol[0];
-                        newState.F[1][2] = uCol[1];
-                        newState.F[2][2] = uCol[2];
-                    }
-                } else if (f === 'L') {
-                    const uCol = [s.U[0][0], s.U[1][0], s.U[2][0]];
-                    const fCol = [s.F[0][0], s.F[1][0], s.F[2][0]];
-                    const dCol = [s.D[0][0], s.D[1][0], s.D[2][0]];
-                    const bCol = [s.B[2][2], s.B[1][2], s.B[0][2]];
-                    if (dir === 1) {
-                        newState.F[0][0] = uCol[0];
-                        newState.F[1][0] = uCol[1];
-                        newState.F[2][0] = uCol[2];
-                        newState.D[0][0] = fCol[0];
-                        newState.D[1][0] = fCol[1];
-                        newState.D[2][0] = fCol[2];
-                        newState.B[2][2] = dCol[0];
-                        newState.B[1][2] = dCol[1];
-                        newState.B[0][2] = dCol[2];
-                        newState.U[0][0] = bCol[0];
-                        newState.U[1][0] = bCol[1];
-                        newState.U[2][0] = bCol[2];
-                    } else {
-                        newState.U[0][0] = bCol[0];
-                        newState.U[1][0] = bCol[1];
-                        newState.U[2][0] = bCol[2];
-                        newState.B[2][2] = dCol[0];
-                        newState.B[1][2] = dCol[1];
-                        newState.B[0][2] = dCol[2];
-                        newState.D[0][0] = fCol[0];
-                        newState.D[1][0] = fCol[1];
-                        newState.D[2][0] = fCol[2];
-                        newState.F[0][0] = uCol[0];
-                        newState.F[1][0] = uCol[1];
-                        newState.F[2][0] = uCol[2];
-                    }
-                } else if (f === 'U') {
-                    const fRow = [s.F[0][0], s.F[0][1], s.F[0][2]];
-                    const rRow = [s.R[0][0], s.R[0][1], s.R[0][2]];
-                    const bRow = [s.B[0][0], s.B[0][1], s.B[0][2]];
-                    const lRow = [s.L[0][0], s.L[0][1], s.L[0][2]];
-                    if (dir === 1) {
-                        newState.R[0] = fRow;
-                        newState.B[0] = rRow;
-                        newState.L[0] = bRow;
-                        newState.F[0] = lRow;
-                    } else {
-                        newState.L[0] = fRow;
-                        newState.F[0] = rRow;
-                        newState.R[0] = bRow;
-                        newState.B[0] = lRow;
-                    }
-                } else if (f === 'D') {
-                    const fRow = [s.F[2][0], s.F[2][1], s.F[2][2]];
-                    const rRow = [s.R[2][0], s.R[2][1], s.R[2][2]];
-                    const bRow = [s.B[2][0], s.B[2][1], s.B[2][2]];
-                    const lRow = [s.L[2][0], s.L[2][1], s.L[2][2]];
-                    if (dir === 1) {
-                        newState.L[2] = fRow;
-                        newState.F[2] = rRow;
-                        newState.R[2] = bRow;
-                        newState.B[2] = lRow;
-                    } else {
-                        newState.R[2] = fRow;
-                        newState.B[2] = rRow;
-                        newState.L[2] = bRow;
-                        newState.F[2] = lRow;
-                    }
-                } else if (f === 'F') {
-                    const uRow = [s.U[2][0], s.U[2][1], s.U[2][2]];
-                    const rCol = [s.R[0][0], s.R[1][0], s.R[2][0]];
-                    const dRow = [s.D[2][0], s.D[2][1], s.D[2][2]];
-                    const lCol = [s.L[0][2], s.L[1][2], s.L[2][2]];
-                    if (dir === 1) {
-                        newState.R[0][0] = uRow[0];
-                        newState.R[1][0] = uRow[1];
-                        newState.R[2][0] = uRow[2];
-                        newState.D[2][0] = rCol[0];
-                        newState.D[2][1] = rCol[1];
-                        newState.D[2][2] = rCol[2];
-                        newState.L[0][2] = dRow[0];
-                        newState.L[1][2] = dRow[1];
-                        newState.L[2][2] = dRow[2];
-                        newState.U[2][0] = lCol[0];
-                        newState.U[2][1] = lCol[1];
-                        newState.U[2][2] = lCol[2];
-                    } else {
-                        newState.U[2][0] = rCol[0];
-                        newState.U[2][1] = rCol[1];
-                        newState.U[2][2] = rCol[2];
-                        newState.L[0][2] = uRow[0];
-                        newState.L[1][2] = uRow[1];
-                        newState.L[2][2] = uRow[2];
-                        newState.D[2][0] = lCol[0];
-                        newState.D[2][1] = lCol[1];
-                        newState.D[2][2] = lCol[2];
-                        newState.R[0][0] = dRow[0];
-                        newState.R[1][0] = dRow[1];
-                        newState.R[2][0] = dRow[2];
-                    }
-                } else if (f === 'B') {
-                    const uRow = [s.U[0][0], s.U[0][1], s.U[0][2]];
-                    const rCol = [s.R[0][2], s.R[1][2], s.R[2][2]];
-                    const dRow = [s.D[0][0], s.D[0][1], s.D[0][2]];
-                    const lCol = [s.L[0][0], s.L[1][0], s.L[2][0]];
-                    if (dir === 1) {
-                        newState.R[0][2] = uRow[2];
-                        newState.R[1][2] = uRow[1];
-                        newState.R[2][2] = uRow[0];
-                        newState.D[0][0] = rCol[2];
-                        newState.D[0][1] = rCol[1];
-                        newState.D[0][2] = rCol[0];
-                        newState.L[0][0] = dRow[2];
-                        newState.L[1][0] = dRow[1];
-                        newState.L[2][0] = dRow[0];
-                        newState.U[0][0] = lCol[2];
-                        newState.U[0][1] = lCol[1];
-                        newState.U[0][2] = lCol[0];
-                    } else {
-                        newState.U[0][0] = rCol[2];
-                        newState.U[0][1] = rCol[1];
-                        newState.U[0][2] = rCol[0];
-                        newState.L[0][0] = uRow[2];
-                        newState.L[1][0] = uRow[1];
-                        newState.L[2][0] = uRow[0];
-                        newState.D[0][0] = lCol[2];
-                        newState.D[0][1] = lCol[1];
-                        newState.D[0][2] = lCol[0];
-                        newState.R[0][2] = dRow[2];
-                        newState.R[1][2] = dRow[1];
-                        newState.R[2][2] = dRow[0];
-                    }
-                }
-
-                // 处理 R2 等
-                for (let i = 0; i < times - 1; i++) {
-                    // 重新应用单次
-                    newState = applyMove(newState, f);
-                }
-                return newState;
-            };
-
-            let finalState = s;
-            const repeat = (dir === 2) ? 2 : 1;
-            const d = (dir === 2) ? 1 : dir;
-            for (let i = 0; i < repeat; i++) {
-                finalState = applySingle(face, d);
-            }
-            // 如果是 R2 等，直接用上面的递归
-            if (dir === 2) {
-                // 我们已经应用了两次，但上面逻辑会递归调用，为了避免无限，直接用单次调用两次
-                // 但上面已经处理了 repeat，直接返回 finalState
-            }
-            // 由于上面 applySingle 内部调用 applyMove 会导致递归，需要重构
-            // 简单暴力: 直接用 if 分支处理
-            // 为了安全，重写 applyMove 不使用递归，直接循环
-            // 我在这里重构成循环版本
-            return applyMoveInternal(state, move);
-        }
-
-        // 真正的内部实现，避免递归
-        function applyMoveInternal(state, move) {
             let s = cloneState(state);
             const face = move[0];
             let dir = 1;
             if (move.includes("'")) dir = -1;
             if (move.includes("2")) dir = 2;
-            const times = (dir === 2) ? 2 : 1;
+            const repeat = (dir === 2) ? 2 : 1;
             const d = (dir === 2) ? 1 : dir;
 
-            for (let t = 0; t < times; t++) {
+            for (let t = 0; t < repeat; t++) {
                 s = applySingleMove(s, face, d);
             }
             return s;
@@ -736,191 +477,127 @@
             }
             ns[f] = fface;
 
-            if (f === 'R') {
-                const uCol = [s.U[0][2], s.U[1][2], s.U[2][2]];
-                const fCol = [s.F[0][2], s.F[1][2], s.F[2][2]];
-                const dCol = [s.D[0][2], s.D[1][2], s.D[2][2]];
-                const bCol = [s.B[2][0], s.B[1][0], s.B[0][0]];
-                if (d === 1) {
-                    ns.F[0][2] = uCol[0];
-                    ns.F[1][2] = uCol[1];
-                    ns.F[2][2] = uCol[2];
-                    ns.D[0][2] = fCol[0];
-                    ns.D[1][2] = fCol[1];
-                    ns.D[2][2] = fCol[2];
-                    ns.B[2][0] = dCol[0];
-                    ns.B[1][0] = dCol[1];
-                    ns.B[0][0] = dCol[2];
-                    ns.U[0][2] = bCol[0];
-                    ns.U[1][2] = bCol[1];
-                    ns.U[2][2] = bCol[2];
-                } else {
-                    ns.U[0][2] = bCol[0];
-                    ns.U[1][2] = bCol[1];
-                    ns.U[2][2] = bCol[2];
-                    ns.B[2][0] = dCol[0];
-                    ns.B[1][0] = dCol[1];
-                    ns.B[0][0] = dCol[2];
-                    ns.D[0][2] = fCol[0];
-                    ns.D[1][2] = fCol[1];
-                    ns.D[2][2] = fCol[2];
-                    ns.F[0][2] = uCol[0];
-                    ns.F[1][2] = uCol[1];
-                    ns.F[2][2] = uCol[2];
+            // 边缘交换：定义每个面顺时针(d=1)时的边缘循环
+            // 每个条目: [源面, 边缘类型, 是否反转], 顺序为循环: 面1->面2->面3->面4->面1
+            const cycles = {
+                'R': [
+                    ['U', 'right', false],
+                    ['F', 'right', false],
+                    ['D', 'right', false],
+                    ['B', 'left', true]
+                ],
+                'L': [
+                    ['U', 'left', false],
+                    ['B', 'right', true],
+                    ['D', 'left', false],
+                    ['F', 'left', false]
+                ],
+                'U': [
+                    ['F', 'top', false],
+                    ['R', 'top', false],
+                    ['B', 'top', false],
+                    ['L', 'top', false]
+                ],
+                'D': [
+                    ['F', 'bottom', false],
+                    ['L', 'bottom', false],
+                    ['B', 'bottom', false],
+                    ['R', 'bottom', false]
+                ],
+                'F': [
+                    ['U', 'bottom', false],
+                    ['R', 'left', false],
+                    ['D', 'bottom', false],
+                    ['L', 'right', true]
+                ],
+                'B': [
+                    ['U', 'top', false],
+                    ['L', 'left', false],
+                    ['D', 'top', false],
+                    ['R', 'right', true]
+                ]
+            };
+
+            const cycle = cycles[f];
+            if (!cycle) return ns;
+
+            // 提取四个边缘值
+            const extract = (face, edge, rev) => {
+                let arr;
+                if (edge === 'top') arr = getRow(ns[face], 0);
+                else if (edge === 'bottom') arr = getRow(ns[face], 2);
+                else if (edge === 'left') arr = getCol(ns[face], 0);
+                else if (edge === 'right') arr = getCol(ns[face], 2);
+                if (rev) arr = reverse(arr);
+                return arr;
+            };
+            const assign = (face, edge, arr, rev) => {
+                if (rev) arr = reverse(arr);
+                if (edge === 'top') setRow(ns[face], 0, arr);
+                else if (edge === 'bottom') setRow(ns[face], 2, arr);
+                else if (edge === 'left') setCol(ns[face], 0, arr);
+                else if (edge === 'right') setCol(ns[face], 2, arr);
+            };
+
+            // 提取原始值
+            const vals = cycle.map(([f, e, r]) => extract(f, e, r));
+
+            // 根据方向循环
+            if (d === 1) { // 顺时针
+                // vals[0] -> vals[1], vals[1]->vals[2], vals[2]->vals[3], vals[3]->vals[0]
+                for (let i = 0; i < 4; i++) {
+                    const [f, e, r] = cycle[(i + 1) % 4];
+                    assign(f, e, vals[i], r);
                 }
-            } else if (f === 'L') {
-                const uCol = [s.U[0][0], s.U[1][0], s.U[2][0]];
-                const fCol = [s.F[0][0], s.F[1][0], s.F[2][0]];
-                const dCol = [s.D[0][0], s.D[1][0], s.D[2][0]];
-                const bCol = [s.B[2][2], s.B[1][2], s.B[0][2]];
-                if (d === 1) {
-                    ns.F[0][0] = uCol[0];
-                    ns.F[1][0] = uCol[1];
-                    ns.F[2][0] = uCol[2];
-                    ns.D[0][0] = fCol[0];
-                    ns.D[1][0] = fCol[1];
-                    ns.D[2][0] = fCol[2];
-                    ns.B[2][2] = dCol[0];
-                    ns.B[1][2] = dCol[1];
-                    ns.B[0][2] = dCol[2];
-                    ns.U[0][0] = bCol[0];
-                    ns.U[1][0] = bCol[1];
-                    ns.U[2][0] = bCol[2];
-                } else {
-                    ns.U[0][0] = bCol[0];
-                    ns.U[1][0] = bCol[1];
-                    ns.U[2][0] = bCol[2];
-                    ns.B[2][2] = dCol[0];
-                    ns.B[1][2] = dCol[1];
-                    ns.B[0][2] = dCol[2];
-                    ns.D[0][0] = fCol[0];
-                    ns.D[1][0] = fCol[1];
-                    ns.D[2][0] = fCol[2];
-                    ns.F[0][0] = uCol[0];
-                    ns.F[1][0] = uCol[1];
-                    ns.F[2][0] = uCol[2];
-                }
-            } else if (f === 'U') {
-                const fRow = [s.F[0][0], s.F[0][1], s.F[0][2]];
-                const rRow = [s.R[0][0], s.R[0][1], s.R[0][2]];
-                const bRow = [s.B[0][0], s.B[0][1], s.B[0][2]];
-                const lRow = [s.L[0][0], s.L[0][1], s.L[0][2]];
-                if (d === 1) {
-                    ns.R[0] = fRow;
-                    ns.B[0] = rRow;
-                    ns.L[0] = bRow;
-                    ns.F[0] = lRow;
-                } else {
-                    ns.L[0] = fRow;
-                    ns.F[0] = rRow;
-                    ns.R[0] = bRow;
-                    ns.B[0] = lRow;
-                }
-            } else if (f === 'D') {
-                const fRow = [s.F[2][0], s.F[2][1], s.F[2][2]];
-                const rRow = [s.R[2][0], s.R[2][1], s.R[2][2]];
-                const bRow = [s.B[2][0], s.B[2][1], s.B[2][2]];
-                const lRow = [s.L[2][0], s.L[2][1], s.L[2][2]];
-                if (d === 1) {
-                    ns.L[2] = fRow;
-                    ns.F[2] = rRow;
-                    ns.R[2] = bRow;
-                    ns.B[2] = lRow;
-                } else {
-                    ns.R[2] = fRow;
-                    ns.B[2] = rRow;
-                    ns.L[2] = bRow;
-                    ns.F[2] = lRow;
-                }
-            } else if (f === 'F') {
-                const uRow = [s.U[2][0], s.U[2][1], s.U[2][2]];
-                const rCol = [s.R[0][0], s.R[1][0], s.R[2][0]];
-                const dRow = [s.D[2][0], s.D[2][1], s.D[2][2]];
-                const lCol = [s.L[0][2], s.L[1][2], s.L[2][2]];
-                if (d === 1) {
-                    ns.R[0][0] = uRow[0];
-                    ns.R[1][0] = uRow[1];
-                    ns.R[2][0] = uRow[2];
-                    ns.D[2][0] = rCol[0];
-                    ns.D[2][1] = rCol[1];
-                    ns.D[2][2] = rCol[2];
-                    ns.L[0][2] = dRow[0];
-                    ns.L[1][2] = dRow[1];
-                    ns.L[2][2] = dRow[2];
-                    ns.U[2][0] = lCol[0];
-                    ns.U[2][1] = lCol[1];
-                    ns.U[2][2] = lCol[2];
-                } else {
-                    ns.U[2][0] = rCol[0];
-                    ns.U[2][1] = rCol[1];
-                    ns.U[2][2] = rCol[2];
-                    ns.L[0][2] = uRow[0];
-                    ns.L[1][2] = uRow[1];
-                    ns.L[2][2] = uRow[2];
-                    ns.D[2][0] = lCol[0];
-                    ns.D[2][1] = lCol[1];
-                    ns.D[2][2] = lCol[2];
-                    ns.R[0][0] = dRow[0];
-                    ns.R[1][0] = dRow[1];
-                    ns.R[2][0] = dRow[2];
-                }
-            } else if (f === 'B') {
-                const uRow = [s.U[0][0], s.U[0][1], s.U[0][2]];
-                const rCol = [s.R[0][2], s.R[1][2], s.R[2][2]];
-                const dRow = [s.D[0][0], s.D[0][1], s.D[0][2]];
-                const lCol = [s.L[0][0], s.L[1][0], s.L[2][0]];
-                if (d === 1) {
-                    ns.R[0][2] = uRow[2];
-                    ns.R[1][2] = uRow[1];
-                    ns.R[2][2] = uRow[0];
-                    ns.D[0][0] = rCol[2];
-                    ns.D[0][1] = rCol[1];
-                    ns.D[0][2] = rCol[0];
-                    ns.L[0][0] = dRow[2];
-                    ns.L[1][0] = dRow[1];
-                    ns.L[2][0] = dRow[0];
-                    ns.U[0][0] = lCol[2];
-                    ns.U[0][1] = lCol[1];
-                    ns.U[0][2] = lCol[0];
-                } else {
-                    ns.U[0][0] = rCol[2];
-                    ns.U[0][1] = rCol[1];
-                    ns.U[0][2] = rCol[0];
-                    ns.L[0][0] = uRow[2];
-                    ns.L[1][0] = uRow[1];
-                    ns.L[2][0] = uRow[0];
-                    ns.D[0][0] = lCol[2];
-                    ns.D[0][1] = lCol[1];
-                    ns.D[0][2] = lCol[0];
-                    ns.R[0][2] = dRow[2];
-                    ns.R[1][2] = dRow[1];
-                    ns.R[2][2] = dRow[0];
+            } else { // 逆时针
+                // vals[0] <- vals[1], vals[1]<-vals[2], vals[2]<-vals[3], vals[3]<-vals[0]
+                for (let i = 0; i < 4; i++) {
+                    const [f, e, r] = cycle[i];
+                    assign(f, e, vals[(i + 1) % 4], r);
                 }
             }
+
             return ns;
         }
 
-        // 自检
+        // ---------- 自检 ----------
         function selfTest() {
             const init = createInitState();
-            const moves = ['R', 'U', "R'", "U'"];
+            // 测试1: (R U R' U') 重复6次应还原
             let s = cloneState(init);
+            const moves = ['R', 'U', "R'", "U'"];
             for (let i = 0; i < 6; i++) {
                 for (const m of moves) {
-                    s = applyMoveInternal(s, m);
+                    s = applyMove(s, m);
                 }
             }
-            // 比较
             const eq = (a, b) => {
-                for (const n of FACE_NAMES) {
+                for (const f of FACES) {
                     for (let r = 0; r < 3; r++)
                         for (let c = 0; c < 3; c++) {
-                            if (a[n][r][c] !== b[n][r][c]) return false;
+                            if (a[f][r][c] !== b[f][r][c]) return false;
                         }
                 }
                 return true;
             };
-            return eq(s, init);
+            if (!eq(s, init)) return false;
+
+            // 测试2: T型公式 (R U R' U' R' F R F') 做两次应还原
+            s = cloneState(init);
+            const tMoves = ['R', 'U', "R'", "U'", "R'", 'F', 'R', "F'"];
+            for (let i = 0; i < 2; i++) {
+                for (const m of tMoves) {
+                    s = applyMove(s, m);
+                }
+            }
+            if (!eq(s, init)) return false;
+
+            // 测试3: 单个R四次还原
+            s = cloneState(init);
+            for (let i = 0; i < 4; i++) s = applyMove(s, 'R');
+            if (!eq(s, init)) return false;
+
+            return true;
         }
 
         // ============================================================
@@ -931,7 +608,6 @@
             const modifiers = ['', "'", '2'];
             const last = { face: '', axis: '' };
             const moves = [];
-
             const axisMap = { R: 'x', L: 'x', U: 'y', D: 'y', F: 'z', B: 'z' };
             for (let i = 0; i < length; i++) {
                 let face, mod, move;
@@ -959,19 +635,16 @@
         let currentState = createInitState();
         let currentScramble = [];
         let colorMap = { U: '#ffffff', D: '#ffd500', F: '#00b74a', B: '#0046ad', L: '#ff5800', R: '#cf1b2b' };
-        // 颜色名称映射
-        const colorNameMap = { U: '白', D: '黄', F: '绿', B: '蓝', L: '橙', R: '红' };
 
-        // 计时器状态
-        let timerState = 'IDLE'; // IDLE, COUNTDOWN, RUNNING, STOPPED
-        let timerValue = 0; // 秒
+        // 计时器
+        let timerState = 'IDLE';
+        let timerValue = 0;
         let countdownValue = 15;
-        let timerInterval = null;
-        let countdownInterval = null;
+        let timerInterval = null,
+            countdownInterval = null;
         let timerStartTime = 0;
-        let isHolding = false;
 
-        // 播放器状态
+        // 播放器
         let playMoves = [];
         let playIndex = 0;
         let playInterval = null;
@@ -982,7 +655,7 @@
         let history = [];
 
         // ============================================================
-        //  4. 渲染: 展开图
+        //  4. 渲染
         // ============================================================
         function drawFlat(state) {
             const canvas = document.getElementById('flatCanvas');
@@ -990,34 +663,17 @@
             const W = canvas.width,
                 H = canvas.height;
             ctx.clearRect(0, 0, W, H);
-
-            const size = 42;
-            const gap = 3;
-            const cell = size + gap;
-            const offX = (W - cell * 4) / 2;
-            const offY = (H - cell * 3) / 2;
-
-            const layout = [
-                ['', '', 'U', '', ''],
-                ['L', 'F', 'R', 'B', ''],
-                ['', '', 'D', '', '']
-            ];
-            const pos = [
-                [0, 2],
-                [1, 0],
-                [1, 1],
-                [1, 2],
-                [1, 3],
-                [2, 2]
-            ];
-            const names = ['U', 'L', 'F', 'R', 'B', 'D'];
-
-            for (let idx = 0; idx < names.length; idx++) {
-                const n = names[idx];
-                const [r, c] = pos[idx];
-                const x = offX + c * cell;
-                const y = offY + r * cell;
-                const face = state[n];
+            const size = 42,
+                gap = 3,
+                cell = size + gap;
+            const offX = (W - cell * 4) / 2,
+                offY = (H - cell * 3) / 2;
+            const pos = { U: [0, 2], L: [1, 0], F: [1, 1], R: [1, 2], B: [1, 3], D: [2, 2] };
+            for (const name of FACES) {
+                const [r, c] = pos[name];
+                const x = offX + c * cell,
+                    y = offY + r * cell;
+                const face = state[name];
                 for (let i = 0; i < 3; i++) {
                     for (let j = 0; j < 3; j++) {
                         const label = face[i][j];
@@ -1029,47 +685,35 @@
                         ctx.strokeRect(x + j * (size + gap), y + i * (size + gap), size, size);
                     }
                 }
-                // 面标签
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 14px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
-                ctx.fillText(n, x + cell / 2, y - 18);
+                ctx.fillText(name, x + cell / 2, y - 18);
             }
         }
 
-        // ============================================================
-        //  5. 渲染: 3D 透视 (固定视角, 无拖拽)
-        // ============================================================
         function draw3D(state) {
             const canvas = document.getElementById('cube3dCanvas');
             const ctx = canvas.getContext('2d');
             const W = canvas.width,
                 H = canvas.height;
             ctx.clearRect(0, 0, W, H);
-
-            // 相机
             const camPos = { x: 3.8, y: 2.8, z: 4.2 };
             const target = { x: 0, y: 0, z: 0 };
             const up = { x: 0, y: 1, z: 0 };
-
-            // 坐标变换: 世界 -> 相机
-            const lookAt = (eye, target, up) => {
-                const zAxis = norm(sub(eye, target));
-                const xAxis = norm(cross(up, zAxis));
-                const yAxis = cross(zAxis, xAxis);
-                return { xAxis, yAxis, zAxis };
-            };
             const norm = (v) => { const l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z); return { x: v.x / l, y: v.y /
                         l, z: v.z / l }; };
             const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
             const cross = (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
             const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
-
-            const view = lookAt(camPos, target, up);
-            const center = { x: 0, y: 0, z: 0 };
+            const view = (() => {
+                const zAxis = norm(sub(camPos, target));
+                const xAxis = norm(cross(up, zAxis));
+                const yAxis = cross(zAxis, xAxis);
+                return { xAxis, yAxis, zAxis };
+            })();
             const fov = 600;
-
             const project = (p) => {
                 const rel = { x: p.x - camPos.x, y: p.y - camPos.y, z: p.z - camPos.z };
                 const x = dot(rel, view.xAxis);
@@ -1079,26 +723,12 @@
                 const scale = fov / z;
                 return { x: W / 2 + x * scale, y: H / 2 - y * scale, z: z };
             };
-
-            // 绘制小立方体
-            const faceMap = {
-                'U': { axis: 'y', val: 1 },
-                'D': { axis: 'y', val: -1 },
-                'F': { axis: 'z', val: 1 },
-                'B': { axis: 'z', val: -1 },
-                'R': { axis: 'x', val: 1 },
-                'L': { axis: 'x', val: -1 }
-            };
-
-            const cubeSize = 0.9;
-            const half = cubeSize / 2;
-            const cubes = [];
+            const half = 0.45;
+            const allFaces = [];
             for (let x = -1; x <= 1; x++) {
                 for (let y = -1; y <= 1; y++) {
                     for (let z = -1; z <= 1; z++) {
-                        const center = { x: x, y: y, z: z };
-                        const faces = [];
-                        // 六个面
+                        const center = { x, y, z };
                         const faceDefs = [
                             { axis: 'x', val: 1, label: 'R' },
                             { axis: 'x', val: -1, label: 'L' },
@@ -1112,75 +742,58 @@
                             if (fd.axis === 'x' && x === fd.val) label = state[fd.label][y + 1]?.[z + 1];
                             else if (fd.axis === 'y' && y === fd.val) label = state[fd.label][x + 1]?.[z + 1];
                             else if (fd.axis === 'z' && z === fd.val) label = state[fd.label][x + 1]?.[y + 1];
-                            if (label) {
-                                const col = colorMap[label] || '#888';
-                                const n = { x: 0, y: 0, z: 0 };
-                                if (fd.axis === 'x') n.x = fd.val;
-                                if (fd.axis === 'y') n.y = fd.val;
-                                if (fd.axis === 'z') n.z = fd.val;
-                                // 法线朝向相机检测
-                                const worldNormal = { x: n.x, y: n.y, z: n.z };
-                                const relEye = sub(camPos, center);
-                                if (dot(worldNormal, relEye) < 0) continue; // 背面剔除
-
-                                const pts = [];
-                                const s = half;
-                                let u1, u2, v1, v2;
-                                if (fd.axis === 'x') { u1 = { x: 0, y: -s, z: -s };
-                                    u2 = { x: 0, y: s, z: -s };
-                                    v1 = { x: 0, y: -s, z: s };
-                                    v2 = { x: 0, y: s, z: s }; } else if (fd.axis === 'y') { u1 = { x: -s, y: 0, z: -s };
-                                    u2 = { x: s, y: 0, z: -s };
-                                    v1 = { x: -s, y: 0, z: s };
-                                    v2 = { x: s, y: 0, z: s }; } else { u1 = { x: -s, y: -s, z: 0 };
-                                    u2 = { x: s, y: -s, z: 0 };
-                                    v1 = { x: -s, y: s, z: 0 };
-                                    v2 = { x: s, y: s, z: 0 }; }
-                                const p = (dx, dy, dz) => {
-                                    const p3 = { x: center.x + dx, y: center.y + dy, z: center.z + dz };
-                                    return project(p3);
-                                };
-                                const p1 = p(u1.x, u1.y, u1.z);
-                                const p2 = p(u2.x, u2.y, u2.z);
-                                const p3 = p(v2.x, v2.y, v2.z);
-                                const p4 = p(v1.x, v1.y, v1.z);
-                                if (p1 && p2 && p3 && p4) {
-                                    faces.push({ pts: [p1, p2, p3, p4], color: col, z: (p1.z + p2.z + p3.z + p4.z) /
-                                            4 });
-                                }
+                            if (!label) continue;
+                            const col = colorMap[label] || '#888';
+                            const n = { x: 0, y: 0, z: 0 };
+                            if (fd.axis === 'x') n.x = fd.val;
+                            if (fd.axis === 'y') n.y = fd.val;
+                            if (fd.axis === 'z') n.z = fd.val;
+                            const relEye = sub(camPos, center);
+                            if (dot(n, relEye) < 0) continue;
+                            let pts;
+                            const s = half;
+                            if (fd.axis === 'x') {
+                                pts = [
+                                    { x: center.x, y: center.y - s, z: center.z - s },
+                                    { x: center.x, y: center.y + s, z: center.z - s },
+                                    { x: center.x, y: center.y + s, z: center.z + s },
+                                    { x: center.x, y: center.y - s, z: center.z + s }
+                                ];
+                            } else if (fd.axis === 'y') {
+                                pts = [
+                                    { x: center.x - s, y: center.y, z: center.z - s },
+                                    { x: center.x + s, y: center.y, z: center.z - s },
+                                    { x: center.x + s, y: center.y, z: center.z + s },
+                                    { x: center.x - s, y: center.y, z: center.z + s }
+                                ];
+                            } else {
+                                pts = [
+                                    { x: center.x - s, y: center.y - s, z: center.z },
+                                    { x: center.x + s, y: center.y - s, z: center.z },
+                                    { x: center.x + s, y: center.y + s, z: center.z },
+                                    { x: center.x - s, y: center.y + s, z: center.z }
+                                ];
                             }
-                        }
-                        if (faces.length > 0) {
-                            cubes.push({ faces });
+                            const proj = pts.map(p => project(p));
+                            if (proj.some(p => p === null)) continue;
+                            const zAvg = proj.reduce((a, b) => a + b.z, 0) / 4;
+                            allFaces.push({ pts: proj.map(p => ({ x: p.x, y: p.y })), color: col, z: zAvg });
                         }
                     }
                 }
             }
-
-            // 按深度排序
-            const allFaces = [];
-            for (const c of cubes) {
-                for (const f of c.faces) {
-                    allFaces.push(f);
-                }
-            }
             allFaces.sort((a, b) => b.z - a.z);
-
             for (const f of allFaces) {
                 ctx.fillStyle = f.color;
                 ctx.strokeStyle = '#1a1e2c';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 ctx.moveTo(f.pts[0].x, f.pts[0].y);
-                for (let i = 1; i < f.pts.length; i++) {
-                    ctx.lineTo(f.pts[i].x, f.pts[i].y);
-                }
+                for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i].x, f.pts[i].y);
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
             }
-
-            // 画轴辅助线
             ctx.fillStyle = '#ffffff40';
             ctx.font = '14px sans-serif';
             ctx.textAlign = 'left';
@@ -1188,9 +801,6 @@
             ctx.fillText('固定视角 (无拖拽)', 12, 12);
         }
 
-        // ============================================================
-        //  6. 整体刷新
-        // ============================================================
         function refreshUI() {
             drawFlat(currentState);
             draw3D(currentState);
@@ -1199,16 +809,12 @@
         }
 
         function updateScrambleDisplay() {
-            const el = document.getElementById('scrambleDisplay');
-            if (currentScramble.length) {
-                el.textContent = currentScramble.join(' ');
-            } else {
-                el.textContent = '(无打乱)';
-            }
+            document.getElementById('scrambleDisplay').textContent =
+                currentScramble.length ? currentScramble.join(' ') : '(无打乱)';
         }
 
         // ============================================================
-        //  7. 计时器
+        //  5. 计时器
         // ============================================================
         function updateTimerDisplay(val) {
             document.getElementById('timerDisplay').textContent = val.toFixed(2);
@@ -1234,7 +840,6 @@
             countdownValue = 15;
             updateTimerDisplay(0);
             setTimerState('IDLE');
-            isHolding = false;
         }
 
         function startCountdown() {
@@ -1243,7 +848,6 @@
             countdownValue = 15;
             setTimerState('COUNTDOWN');
             updateTimerDisplay(countdownValue);
-            if (countdownInterval) clearInterval(countdownInterval);
             countdownInterval = setInterval(() => {
                 countdownValue -= 0.1;
                 if (countdownValue <= 0) {
@@ -1251,10 +855,7 @@
                     updateTimerDisplay(0);
                     clearInterval(countdownInterval);
                     countdownInterval = null;
-                    // 自动开始计时
-                    if (timerState === 'COUNTDOWN') {
-                        startRunning();
-                    }
+                    if (timerState === 'COUNTDOWN') startRunning();
                 } else {
                     updateTimerDisplay(countdownValue);
                     document.getElementById('timerBtn').textContent = `⏳ ${Math.ceil(countdownValue)}s`;
@@ -1270,8 +871,7 @@
             timerStartTime = performance.now();
             setTimerState('RUNNING');
             timerInterval = setInterval(() => {
-                const now = performance.now();
-                timerValue = (now - timerStartTime) / 1000;
+                timerValue = (performance.now() - timerStartTime) / 1000;
                 updateTimerDisplay(timerValue);
             }, 50);
         }
@@ -1282,19 +882,16 @@
             if (countdownInterval) { clearInterval(countdownInterval);
                 countdownInterval = null; }
             setTimerState('STOPPED');
-            // 保存成绩
             if (timerValue > 0 && currentScramble.length > 0) {
                 saveHistory(timerValue, currentScramble.join(' '));
-                // 生成新打乱
                 generateNewScramble();
             } else {
-                // 无效成绩不保存
                 resetTimer();
             }
         }
 
         // ============================================================
-        //  8. 历史记录 (Cookie)
+        //  6. 历史记录 (Cookie)
         // ============================================================
         function getCookie(name) {
             const c = document.cookie.split('; ').find(row => row.startsWith(name + '='));
@@ -1309,27 +906,21 @@
 
         function loadHistory() {
             const data = getCookie('cubeHistory');
-            if (data) {
-                try { history = JSON.parse(data); } catch (e) { history = []; }
-            } else {
-                history = [];
-            }
-            // 按时间排序
+            history = data ? JSON.parse(data) : [];
             history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
             if (history.length > 200) history = history.slice(-200);
             updateHistoryUI();
         }
 
         function saveHistory(time, scramble) {
-            const entry = { time: Math.round(time * 100) / 100, scramble, timestamp: Date.now() };
-            history.push(entry);
+            history.push({ time: Math.round(time * 100) / 100, scramble, timestamp: Date.now() });
             if (history.length > 200) history = history.slice(-200);
             setCookie('cubeHistory', JSON.stringify(history));
             updateHistoryUI();
         }
 
-        function deleteHistory(index) {
-            history.splice(index, 1);
+        function deleteHistory(idx) {
+            history.splice(idx, 1);
             setCookie('cubeHistory', JSON.stringify(history));
             updateHistoryUI();
         }
@@ -1344,17 +935,10 @@
 
         function getStats(range) {
             const list = history.map(e => e.time);
-            let filtered = list;
-            if (range !== 'all') {
-                const n = parseInt(range);
-                filtered = list.slice(-n);
-            }
-            const count = filtered.length;
-            if (count === 0) return { count: 0, avg: null, best: null };
+            let filtered = range === 'all' ? list : list.slice(-parseInt(range));
+            if (filtered.length === 0) return { count: 0, avg: null, best: null };
             const sum = filtered.reduce((a, b) => a + b, 0);
-            const avg = sum / count;
-            const best = Math.min(...filtered);
-            return { count, avg, best };
+            return { count: filtered.length, avg: sum / filtered.length, best: Math.min(...filtered) };
         }
 
         function updateHistoryUI() {
@@ -1363,7 +947,6 @@
             document.getElementById('statCount').textContent = stats.count;
             document.getElementById('statAvg').textContent = stats.avg !== null ? stats.avg.toFixed(2) : '--';
             document.getElementById('statBest').textContent = stats.best !== null ? stats.best.toFixed(2) : '--';
-
             const listEl = document.getElementById('historyList');
             if (history.length === 0) {
                 listEl.innerHTML = '<div style="padding:12px;text-align:center;opacity:0.4;">暂无记录</div>';
@@ -1374,44 +957,34 @@
             for (let i = 0; i < show.length; i++) {
                 const idx = history.length - 1 - i;
                 const e = show[i];
-                const t = e.time.toFixed(2);
                 html += `<div class="history-item">
-                    <span>${t}s  ${e.scramble ? e.scramble.slice(0, 30) : ''}</span>
+                    <span>${e.time.toFixed(2)}s  ${e.scramble ? e.scramble.slice(0, 30) : ''}</span>
                     <span class="del" data-idx="${idx}">✕</span>
                 </div>`;
             }
             listEl.innerHTML = html;
-            // 绑定删除
             listEl.querySelectorAll('.del').forEach(el => {
                 el.addEventListener('click', function() {
-                    const idx = parseInt(this.dataset.idx);
-                    deleteHistory(idx);
+                    deleteHistory(parseInt(this.dataset.idx));
                 });
             });
         }
 
         // ============================================================
-        //  9. 打乱 & 重置
+        //  7. 打乱 & 重置
         // ============================================================
         function generateNewScramble() {
             const len = parseInt(document.getElementById('scrambleLen').value);
             const moves = generateScramble(len);
             currentScramble = moves;
-            // 从初始状态应用打乱
             let s = createInitState();
-            for (const m of moves) {
-                s = applyMoveInternal(s, m);
-            }
+            for (const m of moves) s = applyMove(s, m);
             currentState = s;
-            // 重置播放器
             playMoves = [];
             playIndex = 0;
             stopPlayback();
             refreshUI();
-            // 如果计时器在停止状态，重置
-            if (timerState === 'STOPPED' || timerState === 'IDLE') {
-                resetTimer();
-            }
+            if (timerState === 'STOPPED' || timerState === 'IDLE') resetTimer();
         }
 
         function resetCube() {
@@ -1425,25 +998,20 @@
         }
 
         // ============================================================
-        //  10. 播放器 (打乱逆序)
+        //  8. 播放器 (打乱逆序)
         // ============================================================
         function buildPlayback() {
             if (currentScramble.length === 0) return;
-            // 逆序并反转
             const reversed = [...currentScramble].reverse();
-            const inverted = reversed.map(m => {
+            playMoves = reversed.map(m => {
                 if (m.includes('2')) return m;
                 if (m.includes("'")) return m.replace("'", '');
                 return m + "'";
             });
-            playMoves = inverted;
             playIndex = 0;
             document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
-            // 重置状态到打乱状态
             let s = createInitState();
-            for (const m of currentScramble) {
-                s = applyMoveInternal(s, m);
-            }
+            for (const m of currentScramble) s = applyMove(s, m);
             currentState = s;
             refreshUI();
         }
@@ -1452,19 +1020,14 @@
             if (playMoves.length === 0) return;
             const newIdx = Math.max(0, Math.min(playMoves.length, playIndex + delta));
             if (newIdx === playIndex) return;
-            // 应用或撤销
-            const diff = newIdx - playIndex;
             let s = cloneState(currentState);
-            if (diff > 0) {
-                for (let i = playIndex; i < newIdx; i++) {
-                    s = applyMoveInternal(s, playMoves[i]);
-                }
+            if (newIdx > playIndex) {
+                for (let i = playIndex; i < newIdx; i++) s = applyMove(s, playMoves[i]);
             } else {
                 for (let i = playIndex - 1; i >= newIdx; i--) {
-                    // 逆操作
                     const inv = playMoves[i].includes("'") ? playMoves[i].replace("'", '') :
                         playMoves[i].includes("2") ? playMoves[i] : playMoves[i] + "'";
-                    s = applyMoveInternal(s, inv);
+                    s = applyMove(s, inv);
                 }
             }
             currentState = s;
@@ -1474,21 +1037,13 @@
         }
 
         function togglePlayback() {
-            if (isPlaying) {
-                stopPlayback();
-                return;
-            }
-            if (playMoves.length === 0) {
-                buildPlayback();
-                if (playMoves.length === 0) return;
-            }
+            if (isPlaying) { stopPlayback(); return; }
+            if (playMoves.length === 0) buildPlayback();
+            if (playMoves.length === 0) return;
             if (playIndex >= playMoves.length) {
-                // 从头开始
                 playIndex = 0;
                 let s = createInitState();
-                for (const m of currentScramble) {
-                    s = applyMoveInternal(s, m);
-                }
+                for (const m of currentScramble) s = applyMove(s, m);
                 currentState = s;
                 refreshUI();
                 document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
@@ -1497,14 +1052,9 @@
             document.getElementById('playToggleBtn').textContent = '⏸';
             const speed = parseInt(document.getElementById('playSpeedRange').value);
             playInterval = setInterval(() => {
-                if (playIndex >= playMoves.length) {
-                    stopPlayback();
-                    return;
-                }
+                if (playIndex >= playMoves.length) { stopPlayback(); return; }
                 playStep(1);
-                if (playIndex >= playMoves.length) {
-                    stopPlayback();
-                }
+                if (playIndex >= playMoves.length) stopPlayback();
             }, speed);
         }
 
@@ -1519,11 +1069,8 @@
             stopPlayback();
             if (playMoves.length === 0) buildPlayback();
             if (playMoves.length === 0) return;
-            // 重置到打乱状态
             let s = createInitState();
-            for (const m of currentScramble) {
-                s = applyMoveInternal(s, m);
-            }
+            for (const m of currentScramble) s = applyMove(s, m);
             currentState = s;
             playIndex = 0;
             document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
@@ -1535,12 +1082,8 @@
             if (playMoves.length === 0) buildPlayback();
             if (playMoves.length === 0) return;
             let s = createInitState();
-            for (const m of currentScramble) {
-                s = applyMoveInternal(s, m);
-            }
-            for (const m of playMoves) {
-                s = applyMoveInternal(s, m);
-            }
+            for (const m of currentScramble) s = applyMove(s, m);
+            for (const m of playMoves) s = applyMove(s, m);
             currentState = s;
             playIndex = playMoves.length;
             document.getElementById('playStepIndicator').textContent = `${playIndex} / ${playMoves.length}`;
@@ -1548,12 +1091,12 @@
         }
 
         // ============================================================
-        //  11. 配色
+        //  9. 配色
         // ============================================================
         function initColorPickers() {
             const container = document.getElementById('colorPickerGroup');
             container.innerHTML = '';
-            for (const name of FACE_NAMES) {
+            for (const name of FACES) {
                 const label = document.createElement('label');
                 label.innerHTML =
                     `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${colorMap[name]};"></span> ${name}`;
@@ -1562,8 +1105,7 @@
                 input.value = colorMap[name];
                 input.dataset.face = name;
                 input.addEventListener('input', function() {
-                    const f = this.dataset.face;
-                    colorMap[f] = this.value;
+                    colorMap[this.dataset.face] = this.value;
                     refreshUI();
                 });
                 label.appendChild(input);
@@ -1572,32 +1114,23 @@
         }
 
         // ============================================================
-        //  12. 计时器事件绑定 (键盘 & 触摸)
+        //  10. 计时器事件
         // ============================================================
         function setupTimerEvents() {
             const btn = document.getElementById('timerBtn');
-
-            // 键盘
             document.addEventListener('keydown', (e) => {
-                if (e.key === ' ' || e.code === 'Space') {
-                    e.preventDefault();
-                    handleTimerPress();
-                }
+                if (e.key === ' ' || e.code === 'Space') { e.preventDefault();
+                    handleTimerPress(); }
             });
             document.addEventListener('keyup', (e) => {
-                if (e.key === ' ' || e.code === 'Space') {
-                    e.preventDefault();
-                    handleTimerRelease();
-                }
+                if (e.key === ' ' || e.code === 'Space') { e.preventDefault();
+                    handleTimerRelease(); }
             });
-
-            // 鼠标/触摸
             btn.addEventListener('mousedown', (e) => { e.preventDefault();
                 handleTimerPress(); });
             btn.addEventListener('mouseup', (e) => { e.preventDefault();
                 handleTimerRelease(); });
             btn.addEventListener('mouseleave', () => { if (timerState === 'COUNTDOWN') handleTimerRelease(); });
-
             btn.addEventListener('touchstart', (e) => { e.preventDefault();
                 handleTimerPress(); }, { passive: false });
             btn.addEventListener('touchend', (e) => { e.preventDefault();
@@ -1606,69 +1139,47 @@
         }
 
         function handleTimerPress() {
-            if (timerState === 'IDLE') {
-                startCountdown();
-                isHolding = true;
-            } else if (timerState === 'RUNNING') {
-                stopTimer();
-            } else if (timerState === 'STOPPED') {
-                resetTimer();
-                // 再触发一次 press 会开始倒计时
-                if (timerState === 'IDLE') {
-                    startCountdown();
-                    isHolding = true;
-                }
-            }
+            if (timerState === 'IDLE') { startCountdown(); } else if (timerState === 'RUNNING') { stopTimer(); } else if (
+                timerState === 'STOPPED') { resetTimer(); if (timerState === 'IDLE') startCountdown(); }
         }
 
         function handleTimerRelease() {
             if (timerState === 'COUNTDOWN') {
                 if (countdownValue > 0) {
-                    // 手动松开，开始计时
                     if (countdownInterval) { clearInterval(countdownInterval);
                         countdownInterval = null; }
                     startRunning();
                 }
-                // 如果倒计时归零，已经在 startRunning 里处理了
             }
-            isHolding = false;
         }
 
         // ============================================================
-        //  13. 速度滑块
+        //  11. 速度滑块
         // ============================================================
         document.getElementById('playSpeedRange').addEventListener('input', function() {
             playSpeed = parseInt(this.value);
             document.getElementById('playSpeedLabel').textContent = (playSpeed / 1000).toFixed(1) + 's';
-            if (isPlaying) {
-                stopPlayback();
-                togglePlayback();
-            }
+            if (isPlaying) { stopPlayback();
+                togglePlayback(); }
         });
 
         // ============================================================
-        //  14. 初始化 & 自检
+        //  12. 初始化
         // ============================================================
         function init() {
-            // 自检
             if (!selfTest()) {
                 document.getElementById('errorBanner').classList.remove('hidden');
                 return;
             }
-
             initColorPickers();
             loadHistory();
-
-            // 默认生成打乱
             generateNewScramble();
 
-            // 事件绑定
             document.getElementById('genScrambleBtn').addEventListener('click', generateNewScramble);
             document.getElementById('resetCubeBtn').addEventListener('click', resetCube);
             document.getElementById('statsRange').addEventListener('change', updateHistoryUI);
             document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
 
-            // 播放器
             document.getElementById('playFirstBtn').addEventListener('click', goToFirst);
             document.getElementById('playLastBtn').addEventListener('click', goToLast);
             document.getElementById('playPrevBtn').addEventListener('click', () => { stopPlayback();
@@ -1677,10 +1188,7 @@
                 playStep(1); });
             document.getElementById('playToggleBtn').addEventListener('click', togglePlayback);
 
-            // 计时器
             setupTimerEvents();
-
-            // 窗口大小调整不重绘 (canvas 固定尺寸)
         }
 
         window.onload = init;
