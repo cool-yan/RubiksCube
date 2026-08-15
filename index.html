@@ -3,32 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>原生逻辑魔方打乱与计时器</title>
+    <title>原生真3D魔方打乱与计时器</title>
     <style>
-        :root {
-            --bg: #1a1a1a;
-            --panel: #2a2a2a;
-            --text: #f0f0f0;
-            --accent: #4caf50;
-        }
+        :root { --bg: #1a1a1a; --panel: #2a2a2a; --text: #f0f0f0; --accent: #4caf50; }
         body { margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; }
         .container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1200px; width: 100%; justify-content: center; }
         .panel { background: var(--panel); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h2, h3 { margin-top: 0; color: #fff; }
+        h2, h3 { margin-top: 0; color: #fff; text-align: center; font-size: 16px;}
         
         /* 计时器与打乱区 */
         .scramble-box { text-align: center; font-size: 24px; letter-spacing: 2px; margin-bottom: 20px; font-weight: bold; color: #ffeb3b; min-height: 35px;}
-        .timer-display { font-size: 80px; font-family: monospace; text-align: center; margin: 20px 0; cursor: pointer; user-select: none; }
+        .timer-display { font-size: 80px; font-family: monospace; text-align: center; margin: 10px 0; cursor: pointer; user-select: none; }
         .timer-display.inspection { color: #f44336; }
         
         /* 视图区 */
-        .view-container { display: flex; gap: 20px; justify-content: center; align-items: flex-start; }
+        .view-container { display: flex; gap: 20px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
         canvas { background: #222; border-radius: 8px; }
+        #container3D { width: 260px; height: 260px; background: #222; border-radius: 8px; cursor: grab; position: relative; }
+        #container3D:active { cursor: grabbing; }
+        .hint { position: absolute; bottom: 5px; width: 100%; text-align: center; font-size: 12px; color: #888; pointer-events: none; }
         
         /* 控制按钮 */
         .controls { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
         button { background: #444; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: 0.2s; }
         button:hover { background: #555; }
+        button:disabled { background: #333; color: #777; cursor: not-allowed; }
         button.primary { background: var(--accent); }
         button.primary:hover { background: #45a049; }
         
@@ -39,40 +38,45 @@
         
         .records-list { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 14px; }
         .record-item { display: flex; justify-content: space-between; padding: 5px; border-bottom: 1px solid #444; }
-        .delete-btn { color: #ff4c4c; cursor: pointer; margin-left: 10px; }
+        .delete-btn { color: #ff4c4c; cursor: pointer; margin-left: 10px; font-weight: bold; }
     </style>
+    <!-- 引入 Three.js 与 OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
-<div class="scramble-box" id="scrambleText">R U R' U' ...</div>
+<div class="scramble-box" id="scrambleText">加载中...</div>
 
 <div class="container">
     <!-- 主交互区 -->
-    <div class="panel" style="flex: 2; min-width: 300px;">
+    <div class="panel" style="flex: 2; min-width: 320px;">
         <div class="timer-display" id="timeDisplay">0.000</div>
-        <p style="text-align: center; color: #aaa; font-size: 14px;">长按空格/点击时间开始 15 秒倒计时，松开开始计时，再按停止</p>
+        <p style="text-align: center; color: #aaa; font-size: 14px; margin-top: -10px; margin-bottom: 20px;">按住空格/屏幕 15 秒倒计时，松开开始计时，再按停止</p>
         
         <div class="view-container">
             <div>
-                <h3 style="font-size: 16px; text-align: center;">2D 展开图</h3>
-                <canvas id="canvas2D" width="240" height="180"></canvas>
+                <h3>真 3D 跟做视图</h3>
+                <div id="container3D">
+                    <div class="hint">按住鼠标可 360° 拖拽旋转</div>
+                </div>
             </div>
             <div>
-                <h3 style="font-size: 16px; text-align: center;">伪 3D 跟做视图</h3>
-                <canvas id="canvas3D" width="200" height="180"></canvas>
+                <h3>2D 展开图 (校验)</h3>
+                <canvas id="canvas2D" width="240" height="180" style="margin-top: 40px;"></canvas>
             </div>
         </div>
 
         <div class="controls">
-            <button onclick="playStep(-1)">◀ 上一步</button>
-            <button onclick="toggleAutoPlay()" id="playBtn">▶ 自动播放还原</button>
-            <button onclick="playStep(1)">下一步 ▶</button>
+            <button onclick="playStep(-1)" id="btnPrev">◀ 上一步</button>
+            <button onclick="toggleAutoPlay()" id="btnPlay">▶ 自动播放</button>
+            <button onclick="playStep(1)" id="btnNext">下一步 ▶</button>
         </div>
-        <p style="text-align: center; font-size: 12px; color: #888;">当前还原步骤: <span id="solveStepText">准备中</span></p>
+        <p style="text-align: center; font-size: 14px; color: #ccc;">还原步骤: <span id="solveStepText">准备中</span></p>
     </div>
 
     <!-- 侧边栏：设置与数据 -->
-    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 250px;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 260px;">
         <div class="panel">
             <h3>偏好设置</h3>
             <div class="settings-grid">
@@ -82,14 +86,14 @@
                     <option value="20" selected>20 步</option>
                     <option value="25">25 步</option>
                 </select>
-                <label>配色 (U,D,F,B,L,R):</label>
+                <label>配色自定义:</label>
                 <div style="display:flex; gap:2px;">
-                    <input type="color" id="colU" value="#ffffff" onchange="updateColors()">
-                    <input type="color" id="colD" value="#ffff00" onchange="updateColors()">
-                    <input type="color" id="colF" value="#00ff00" onchange="updateColors()">
-                    <input type="color" id="colB" value="#0000ff" onchange="updateColors()">
-                    <input type="color" id="colL" value="#ffa500" onchange="updateColors()">
-                    <input type="color" id="colR" value="#ff0000" onchange="updateColors()">
+                    <input type="color" id="colU" value="#ffffff" onchange="updateColors()" title="上(U)">
+                    <input type="color" id="colD" value="#ffff00" onchange="updateColors()" title="下(D)">
+                    <input type="color" id="colF" value="#00ff00" onchange="updateColors()" title="前(F)">
+                    <input type="color" id="colB" value="#0000ff" onchange="updateColors()" title="后(B)">
+                    <input type="color" id="colL" value="#ffa500" onchange="updateColors()" title="左(L)">
+                    <input type="color" id="colR" value="#ff0000" onchange="updateColors()" title="右(R)">
                 </div>
             </div>
             <button class="primary" style="width: 100%;" onclick="generateNew()">生成新打乱</button>
@@ -109,42 +113,36 @@
 </div>
 
 <script>
-/**
- * 核心逻辑层：使用单维数组模拟 6 面 * 9 贴纸 = 54 个状态位
- * 面索引映射: U:0, R:1, F:2, D:3, L:4, B:5
- */
+/** -------------------------------------------------------------
+ *  1. 底层核心算法层 (保持 2D 状态机做底层校验)
+ *  ------------------------------------------------------------- */
 const FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
-let currentScramble = [];
-let solveSteps = [];
-let solveIndex = 0;
+let currentScramble = [], solveSteps = [], solveIndex = 0;
 let cubeState = new Array(54).fill(0);
 let colors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#ffa500', '#0000ff'];
 
-// 颜色绑定
+// 颜色绑定 (顺带直接更新 3D 材质)
 function updateColors() {
     colors = [
-        document.getElementById('colU').value,
-        document.getElementById('colR').value,
-        document.getElementById('colF').value,
-        document.getElementById('colD').value,
-        document.getElementById('colL').value,
-        document.getElementById('colB').value
+        document.getElementById('colU').value, document.getElementById('colR').value,
+        document.getElementById('colF').value, document.getElementById('colD').value,
+        document.getElementById('colL').value, document.getElementById('colB').value
     ];
     render2D();
-    render3D();
+    if (matDict) {
+        matDict.U.color.set(colors[0]); matDict.R.color.set(colors[1]);
+        matDict.F.color.set(colors[2]); matDict.D.color.set(colors[3]);
+        matDict.L.color.set(colors[4]); matDict.B.color.set(colors[5]);
+    }
 }
 
-// 核心：魔方旋转算法 (90度顺时针)
-// 这个循环映射非常考验数据结构的精确度
+// 精确的 2D 状态机旋转 (用来做逻辑兜底，防止 3D 浮点误差累积)
 function rotateFace(face) {
     const f = face * 9;
-    // 面上的 8 个贴纸顺时针循环
     const temp = [cubeState[f], cubeState[f+1], cubeState[f+2], cubeState[f+5], cubeState[f+8], cubeState[f+7], cubeState[f+6], cubeState[f+3]];
     cubeState[f] = temp[6]; cubeState[f+1] = temp[7]; cubeState[f+2] = temp[0];
     cubeState[f+5] = temp[1]; cubeState[f+8] = temp[2]; cubeState[f+7] = temp[3];
     cubeState[f+6] = temp[4]; cubeState[f+3] = temp[5];
-
-    // 邻边循环映射
     const adj = {
         0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], // U
         1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], // R
@@ -153,7 +151,6 @@ function rotateFace(face) {
         4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], // L
         5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  // B
     }[face];
-
     let edgeTemp = [cubeState[adj[0][0]*9 + adj[0][1]], cubeState[adj[0][0]*9 + adj[0][2]], cubeState[adj[0][0]*9 + adj[0][3]]];
     for (let i = 0; i < 3; i++) {
         cubeState[adj[0][0]*9 + adj[0][i+1]] = cubeState[adj[3][0]*9 + adj[3][i+1]];
@@ -163,137 +160,179 @@ function rotateFace(face) {
     }
 }
 
-function doMove(moveStr) {
-    const faceStr = moveStr[0];
-    const modifier = moveStr[1] || '';
+function doMove2D(moveStr) {
+    const faceStr = moveStr[0], modifier = moveStr[1] || '';
     const faceIdx = FACES.indexOf(faceStr);
     let turns = modifier === "'" ? 3 : (modifier === "2" ? 2 : 1);
     for(let i=0; i<turns; i++) rotateFace(faceIdx);
 }
 
-// 还原逻辑（直接取逆向公式作为新手"最速跟做"）
 function getInverseMove(move) {
     if (move.includes("'")) return move[0];
     if (move.includes("2")) return move;
     return move + "'";
 }
 
-// WCA 打乱生成器
+// 严谨的 WCA 规范打乱生成
 function generateScramble(length) {
-    const moves = [];
-    const modifiers = ["", "'", "2"];
-    let lastFace = -1;
-    let secLastFace = -1;
-    
+    const moves = [], modifiers = ["", "'", "2"];
+    let lastFace = -1, secLastFace = -1;
     for (let i = 0; i < length; i++) {
         let face;
-        do {
-            face = Math.floor(Math.random() * 6);
-        // 避免同面连续（如 R R），避免同轴往复（如 R L R）
-        } while (face === lastFace || (Math.floor(face / 2) === Math.floor(lastFace / 2) && face === secLastFace));
-        
-        secLastFace = lastFace;
-        lastFace = face;
+        do { face = Math.floor(Math.random() * 6); } 
+        while (face === lastFace || (Math.floor(face / 2) === Math.floor(lastFace / 2) && face === secLastFace));
+        secLastFace = lastFace; lastFace = face;
         moves.push(FACES[face] + modifiers[Math.floor(Math.random() * 3)]);
     }
     return moves;
 }
 
-function resetCube() {
-    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
-}
-
-function generateNew() {
-    const len = parseInt(document.getElementById('scrambleLength').value);
-    currentScramble = generateScramble(len);
-    document.getElementById('scrambleText').innerText = currentScramble.join(" ");
-    
-    resetCube();
-    currentScramble.forEach(doMove);
-    
-    // 生成逆序还原步骤
-    solveSteps = [...currentScramble].reverse().map(getInverseMove);
-    solveIndex = 0;
-    updateSolveText();
-    
-    render2D();
-    render3D();
-}
-
-/**
- * UI 与 渲染层
- */
+/** -------------------------------------------------------------
+ *  2. 渲染层 (2D + 真正 Three.js WebGL)
+ *  ------------------------------------------------------------- */
 const ctx2D = document.getElementById('canvas2D').getContext('2d');
-const ctx3D = document.getElementById('canvas3D').getContext('2d');
-
-function drawFace2D(ctx, faceIdx, offsetX, offsetY, size) {
-    const f = faceIdx * 9;
-    const s = size / 3;
-    for(let i=0; i<9; i++) {
-        let r = Math.floor(i / 3), c = i % 3;
-        ctx.fillStyle = colors[cubeState[f + i]];
-        ctx.fillRect(offsetX + c*s, offsetY + r*s, s-1, s-1);
-    }
-}
-
 function render2D() {
     ctx2D.clearRect(0, 0, 240, 180);
     const s = 45; 
-    // 经典十字网格排布 U:0, L:4, F:2, R:1, B:5, D:3
-    drawFace2D(ctx2D, 0, s, 0, s);    // U
-    drawFace2D(ctx2D, 4, 0, s, s);    // L
-    drawFace2D(ctx2D, 2, s, s, s);    // F
-    drawFace2D(ctx2D, 1, s*2, s, s);  // R
-    drawFace2D(ctx2D, 5, s*3, s, s);  // B
-    drawFace2D(ctx2D, 3, s, s*2, s);  // D
+    const drawF = (f, ox, oy) => {
+        for(let i=0; i<9; i++) {
+            ctx2D.fillStyle = colors[cubeState[f*9 + i]];
+            ctx2D.fillRect(ox + (i%3)*s/3, oy + Math.floor(i/3)*s/3, s/3-1, s/3-1);
+        }
+    };
+    drawF(0, s, 0);   drawF(4, 0, s);   drawF(2, s, s);
+    drawF(1, s*2, s); drawF(5, s*3, s); drawF(3, s, s*2);
 }
 
-// 纯 Canvas 伪 3D 渲染 (等距视角投影)
-function render3D() {
-    ctx3D.clearRect(0, 0, 200, 180);
-    ctx3D.save();
-    ctx3D.translate(100, 40); // 视角中心
-    const s = 30; // 贴纸基准大小
+// --- Three.js 核心初始化 ---
+let scene, camera, renderer, controls;
+let cubies = [];
+let pivot = new THREE.Group();
+let matDict = null;
 
-    // 画 U 面 (倾斜与旋转)
-    ctx3D.save();
-    ctx3D.transform(1, 0.5, -1, 0.5, 0, 0);
-    for(let i=0; i<9; i++) {
-        let r = Math.floor(i/3), c = i%3;
-        ctx3D.fillStyle = colors[cubeState[0*9 + i]];
-        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
-    }
-    ctx3D.restore();
-
-    // 画 F 面
-    ctx3D.save();
-    ctx3D.translate(-s*3, s*1.5);
-    ctx3D.transform(1, -0.5, 0, 1, 0, 0);
-    for(let i=0; i<9; i++) {
-        let r = Math.floor(i/3), c = i%3;
-        ctx3D.fillStyle = colors[cubeState[2*9 + i]];
-        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
-    }
-    ctx3D.restore();
-
-    // 画 R 面
-    ctx3D.save();
-    ctx3D.translate(0, s*1.5);
-    ctx3D.transform(1, 0.5, 0, 1, 0, 0);
-    for(let i=0; i<9; i++) {
-        let r = Math.floor(i/3), c = i%3;
-        ctx3D.fillStyle = colors[cubeState[1*9 + i]];
-        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
-    }
-    ctx3D.restore();
+function init3D() {
+    const container = document.getElementById('container3D');
+    scene = new THREE.Scene();
     
-    ctx3D.restore();
+    // 相机与 OrbitControls 配置 (允许拖拽)
+    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(4, 4, 6);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(260, 260);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+    
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false; controls.enableZoom = false; controls.enableDamping = true;
+
+    // 材质映射字典
+    matDict = {
+        U: new THREE.MeshBasicMaterial({ color: colors[0] }),
+        D: new THREE.MeshBasicMaterial({ color: colors[3] }),
+        F: new THREE.MeshBasicMaterial({ color: colors[2] }),
+        B: new THREE.MeshBasicMaterial({ color: colors[5] }),
+        R: new THREE.MeshBasicMaterial({ color: colors[1] }),
+        L: new THREE.MeshBasicMaterial({ color: colors[4] }),
+        K: new THREE.MeshBasicMaterial({ color: 0x111111 }) // 内层纯黑
+    };
+
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
 }
 
-/**
- * 播放器逻辑
- */
-let autoPlayInterval = null;
+// 重建绝对还原的 3D 魔方模型
+function createCube3D() {
+    cubies.forEach(c => scene.remove(c));
+    cubies = [];
+    const gap = 1.05; // 间距
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    
+    for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+            for (let z = -1; z <= 1; z++) {
+                // Three.js 材质数组顺序: +x(R), -x(L), +y(U), -y(D), +z(F), -z(B)
+                let mats = [
+                    x === 1 ? matDict.R : matDict.K, x === -1 ? matDict.L : matDict.K,
+                    y === 1 ? matDict.U : matDict.K, y === -1 ? matDict.D : matDict.K,
+                    z === 1 ? matDict.F : matDict.K, z === -1 ? matDict.B : matDict.K
+                ];
+                const mesh = new THREE.Mesh(geo, mats);
+                // 加个黑色边框让 3D 效果更好看
+                const edges = new THREE.EdgesGeometry(geo);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+                mesh.add(line);
+                mesh.position.set(x * gap, y * gap, z * gap);
+                scene.add(mesh);
+                cubies.push(mesh);
+            }
+        }
+    }
+}
+
+// 执行 3D 旋转核心运算 (支持立即完成或平滑动画)
+let isAnimating = false;
+function applyTurn3D(face, modifier, instant = false, onComplete = null) {
+    if(isAnimating && !instant) return;
+    if(!instant) isAnimating = true;
+
+    // 旋转轴系与方向映射 (遵循右手螺旋定则)
+    let axis = ['U','D'].includes(face) ? 'y' : (['R','L'].includes(face) ? 'x' : 'z');
+    let sign = ['U','R','F'].includes(face) ? -1 : 1; 
+    let turns = modifier === "'" ? -1 : (modifier === "2" ? 2 : 1);
+    let targetAngle = sign * turns * (Math.PI / 2);
+
+    // 动态抓取当前处于该层的 色块(Cubie)
+    const activeCubies = [];
+    const threshold = 0.5;
+    cubies.forEach(c => {
+        const pos = new THREE.Vector3();
+        c.getWorldPosition(pos);
+        if      (face === 'U' && pos.y > threshold) activeCubies.push(c);
+        else if (face === 'D' && pos.y < -threshold) activeCubies.push(c);
+        else if (face === 'R' && pos.x > threshold) activeCubies.push(c);
+        else if (face === 'L' && pos.x < -threshold) activeCubies.push(c);
+        else if (face === 'F' && pos.z > threshold) activeCubies.push(c);
+        else if (face === 'B' && pos.z < -threshold) activeCubies.push(c);
+    });
+
+    // 将选中的色块挂载到 pivot (旋转中枢)
+    scene.add(pivot);
+    pivot.rotation.set(0,0,0);
+    pivot.position.set(0,0,0);
+    activeCubies.forEach(c => pivot.attach(c));
+
+    if (instant) {
+        pivot.rotation[axis] = targetAngle;
+        pivot.updateMatrixWorld();
+        activeCubies.forEach(c => scene.attach(c)); // 脱离中枢并保留世界矩阵变换
+        if (onComplete) onComplete();
+    } else {
+        const duration = 250; 
+        const start = performance.now();
+        function tween() {
+            let progress = (performance.now() - start) / duration;
+            if (progress >= 1) {
+                pivot.rotation[axis] = targetAngle;
+                pivot.updateMatrixWorld();
+                activeCubies.forEach(c => scene.attach(c));
+                isAnimating = false;
+                if(onComplete) onComplete();
+            } else {
+                // easeOut 平滑缓动效果
+                const ease = 1 - Math.pow(1 - progress, 3);
+                pivot.rotation[axis] = targetAngle * ease;
+                requestAnimationFrame(tween);
+            }
+        }
+        tween();
+    }
+}
+
+/** -------------------------------------------------------------
+ *  3. 播放器逻辑层 (包含自动播放队列与状态同步)
+ *  ------------------------------------------------------------- */
+let isAutoPlaying = false;
 
 function updateSolveText() {
     let t = solveSteps.map((s, i) => i === solveIndex ? `<span style="color:var(--accent); font-weight:bold;">${s}</span>` : s).join(" ");
@@ -301,172 +340,176 @@ function updateSolveText() {
     document.getElementById('solveStepText').innerHTML = t;
 }
 
-function playStep(dir) {
-    if(dir === 1 && solveIndex < solveSteps.length) {
-        doMove(solveSteps[solveIndex]);
+function playStep(dir, autoCallback = null) {
+    if(isAnimating) return;
+    let move;
+    
+    if (dir === 1 && solveIndex < solveSteps.length) {
+        move = solveSteps[solveIndex];
+        doMove2D(move); // 2D 先行
         solveIndex++;
     } else if (dir === -1 && solveIndex > 0) {
         solveIndex--;
-        doMove(getInverseMove(solveSteps[solveIndex])); // 回退是做逆向的逆向
+        move = getInverseMove(solveSteps[solveIndex]);
+        doMove2D(move); // 退回等于执行逆公式
+    } else {
+        return;
     }
+    
     updateSolveText();
     render2D();
-    render3D();
     
-    if(solveIndex >= solveSteps.length && autoPlayInterval) toggleAutoPlay();
+    // 执行 3D 动画
+    applyTurn3D(move[0], move[1] || '', false, autoCallback);
 }
 
 function toggleAutoPlay() {
-    const btn = document.getElementById('playBtn');
-    if (autoPlayInterval) {
-        clearInterval(autoPlayInterval);
-        autoPlayInterval = null;
-        btn.innerText = "▶ 自动播放还原";
+    const btn = document.getElementById('btnPlay');
+    if (isAutoPlaying) {
+        isAutoPlaying = false;
+        btn.innerText = "▶ 自动播放";
     } else {
-        if(solveIndex >= solveSteps.length) return; // 已经拼好
+        if(solveIndex >= solveSteps.length) return;
+        isAutoPlaying = true;
         btn.innerText = "⏸ 暂停";
-        autoPlayInterval = setInterval(() => playStep(1), 800);
+        playNextAuto();
     }
 }
 
-/**
- * 计时器与数据持久化逻辑 (Cookie)
- */
-let timerState = 'IDLE'; // IDLE, INSPECT, RUNNING
-let startTime = 0;
-let inspectTime = 0;
-let timerInterval = null;
-let records = [];
+function playNextAuto() {
+    if (!isAutoPlaying) return;
+    if (solveIndex < solveSteps.length) {
+        playStep(1, () => {
+            if (isAutoPlaying) setTimeout(playNextAuto, 150); // 间隔一小会儿再播下一步
+        });
+    } else {
+        toggleAutoPlay();
+    }
+}
+
+function generateNew() {
+    if (isAnimating) return;
+    isAutoPlaying = false;
+    document.getElementById('btnPlay').innerText = "▶ 自动播放";
+    
+    const len = parseInt(document.getElementById('scrambleLength').value);
+    currentScramble = generateScramble(len);
+    document.getElementById('scrambleText').innerText = currentScramble.join(" ");
+    
+    // 强制重置底层2D 与 3D模型（避免浮点误差累积）
+    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
+    createCube3D();
+    
+    // 瞬间打乱 3D 和 2D
+    currentScramble.forEach(move => {
+        doMove2D(move);
+        applyTurn3D(move[0], move[1] || '', true);
+    });
+    
+    solveSteps = [...currentScramble].reverse().map(getInverseMove);
+    solveIndex = 0;
+    updateSolveText();
+    render2D();
+}
+
+/** -------------------------------------------------------------
+ *  4. 计时器与数据持久化逻辑 (Cookie)
+ *  ------------------------------------------------------------- */
+let timerState = 'IDLE', startTime = 0, inspectTime = 0, timerInterval = null, records = [];
 
 function getCookies() {
     const match = document.cookie.match(new RegExp('(^| )rubikRecords=([^;]+)'));
     if (match) records = JSON.parse(decodeURIComponent(match[2]));
     updateRecordsUI();
 }
-
 function saveCookies() {
-    document.cookie = `rubikRecords=${encodeURIComponent(JSON.stringify(records))}; path=/; max-age=31536000`; // 保存1年
+    document.cookie = `rubikRecords=${encodeURIComponent(JSON.stringify(records))}; path=/; max-age=31536000`;
     updateRecordsUI();
 }
-
-function formatTime(ms) {
-    return (ms / 1000).toFixed(3);
-}
+function formatTime(ms) { return (ms / 1000).toFixed(3); }
 
 function updateRecordsUI() {
     const list = document.getElementById('recordsList');
     list.innerHTML = '';
-    
     if (records.length === 0) {
-        document.getElementById('pbText').innerText = "--";
-        document.getElementById('ao5Text').innerText = "--";
-        document.getElementById('totalCount').innerText = "0";
-        return;
+        document.getElementById('pbText').innerText = "--"; document.getElementById('ao5Text').innerText = "--";
+        document.getElementById('totalCount').innerText = "0"; return;
     }
-
-    let pb = Math.min(...records);
-    document.getElementById('pbText').innerText = formatTime(pb);
+    document.getElementById('pbText').innerText = formatTime(Math.min(...records));
     document.getElementById('totalCount').innerText = records.length;
     
-    // 计算 Ao5（去掉一个最高分，一个最低分）
     if(records.length >= 5) {
         let last5 = records.slice(0, 5).sort((a,b)=>a-b);
-        let ao5 = (last5[1] + last5[2] + last5[3]) / 3;
-        document.getElementById('ao5Text').innerText = formatTime(ao5);
-    } else {
-        document.getElementById('ao5Text').innerText = "--";
-    }
+        document.getElementById('ao5Text').innerText = formatTime((last5[1] + last5[2] + last5[3]) / 3);
+    } else document.getElementById('ao5Text').innerText = "--";
 
     records.forEach((rec, idx) => {
-        let div = document.createElement('div');
-        div.className = 'record-item';
-        div.innerHTML = `<span>${records.length - idx}. ${formatTime(rec)}s</span>
-                         <span class="delete-btn" onclick="deleteRecord(${idx})">x</span>`;
+        let div = document.createElement('div'); div.className = 'record-item';
+        div.innerHTML = `<span>${records.length - idx}. ${formatTime(rec)}s</span><span class="delete-btn" onclick="deleteRecord(${idx})">x</span>`;
         list.appendChild(div);
     });
 }
+function deleteRecord(idx) { records.splice(idx, 1); saveCookies(); }
+function clearRecords() { if(confirm("确定要清空所有历史成绩吗？")) { records = []; saveCookies(); } }
 
-function deleteRecord(idx) {
-    records.splice(idx, 1);
-    saveCookies();
-}
-
-function clearRecords() {
-    if(confirm("确定要清空所有历史成绩吗？")) {
-        records = [];
-        saveCookies();
-    }
-}
-
-// 计时器主函数
 function startInspection() {
     if(timerState !== 'IDLE') return;
-    timerState = 'INSPECT';
-    inspectTime = 15;
+    timerState = 'INSPECT'; inspectTime = 15;
     document.getElementById('timeDisplay').innerText = inspectTime;
     document.getElementById('timeDisplay').classList.add('inspection');
     
     timerInterval = setInterval(() => {
         inspectTime--;
-        if(inspectTime > 0) {
-            document.getElementById('timeDisplay').innerText = inspectTime;
-        } else {
-            // 倒计时结束，自动开始计时
-            startTimer();
-        }
+        if(inspectTime > 0) document.getElementById('timeDisplay').innerText = inspectTime;
+        else startTimer();
     }, 1000);
 }
 
 function startTimer() {
     if(timerState === 'RUNNING') return;
-    clearInterval(timerInterval);
-    timerState = 'RUNNING';
-    startTime = performance.now();
+    clearInterval(timerInterval); timerState = 'RUNNING'; startTime = performance.now();
     document.getElementById('timeDisplay').classList.remove('inspection');
-    
-    timerInterval = setInterval(() => {
-        document.getElementById('timeDisplay').innerText = formatTime(performance.now() - startTime);
-    }, 10);
+    timerInterval = setInterval(() => { document.getElementById('timeDisplay').innerText = formatTime(performance.now() - startTime); }, 10);
 }
 
 function stopTimer() {
     if(timerState !== 'RUNNING') return;
-    clearInterval(timerInterval);
-    timerState = 'IDLE';
+    clearInterval(timerInterval); timerState = 'IDLE';
     let finalTime = performance.now() - startTime;
     document.getElementById('timeDisplay').innerText = formatTime(finalTime);
-    
-    // 保存成绩并自动打乱下一个
-    records.unshift(finalTime);
-    saveCookies();
-    generateNew();
+    records.unshift(finalTime); saveCookies(); generateNew();
 }
 
-// 事件监听：处理空格与触屏
+// 防止点击设置、按钮或 3D 视图时触发计时器
+function isValidTimerTarget(e) {
+    if(e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return false;
+    if(e.target.closest && e.target.closest('#container3D')) return false; // 排除 3D 拖拽区
+    return true;
+}
+
 function handleInputDown(e) {
+    if (!isValidTimerTarget(e)) return;
     if (e.code === 'Space' || e.type === 'touchstart' || e.type === 'mousedown') {
-        if(e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') return; // 防止冲突
         if (timerState === 'IDLE') startInspection();
         else if (timerState === 'RUNNING') stopTimer();
     }
 }
-
 function handleInputUp(e) {
+    if (!isValidTimerTarget(e)) return;
     if (e.code === 'Space' || e.type === 'touchend' || e.type === 'mouseup') {
         if (timerState === 'INSPECT') startTimer();
     }
 }
 
-window.addEventListener('keydown', (e) => { if(e.code==='Space') e.preventDefault(); handleInputDown(e); });
+window.addEventListener('keydown', (e) => { if(e.code==='Space') { e.preventDefault(); handleInputDown(e); } });
 window.addEventListener('keyup', handleInputUp);
-
 const timeDisp = document.getElementById('timeDisplay');
-timeDisp.addEventListener('mousedown', handleInputDown);
-timeDisp.addEventListener('mouseup', handleInputUp);
+timeDisp.addEventListener('mousedown', handleInputDown); timeDisp.addEventListener('mouseup', handleInputUp);
 timeDisp.addEventListener('touchstart', (e) => { e.preventDefault(); handleInputDown(e); });
 timeDisp.addEventListener('touchend', handleInputUp);
 
-// 初始化
+// --- 初始化流 ---
+init3D();
 updateColors();
 getCookies();
 generateNew();
