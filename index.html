@@ -34,7 +34,7 @@
         /* 设置与记录 */
         .settings-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-bottom: 15px; }
         input[type="color"] { border: none; width: 30px; height: 30px; cursor: pointer; background: none; }
-        select, input[type="number"] { background: #333; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; }
+        select, input[type="number"] { background: #333; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; outline: none; }
         
         .records-list { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 14px; }
         .record-item { display: flex; justify-content: space-between; padding: 5px; border-bottom: 1px solid #444; }
@@ -67,12 +67,21 @@
             </div>
         </div>
 
+        <!-- 新增：动画模式切换 -->
+        <div style="text-align: center; margin-top: 20px; font-size: 14px; color: #ccc;">
+            <label>演示模式: </label>
+            <select id="animMode" onchange="switchAnimMode()" style="margin-left: 5px;">
+                <option value="solve" selected>复原 (从打乱到复原)</option>
+                <option value="scramble">打乱 (从复原到打乱)</option>
+            </select>
+        </div>
+
         <div class="controls">
             <button onclick="playStep(-1)" id="btnPrev">◀ 上一步</button>
             <button onclick="toggleAutoPlay()" id="btnPlay">▶ 自动播放</button>
             <button onclick="playStep(1)" id="btnNext">下一步 ▶</button>
         </div>
-        <p style="text-align: center; font-size: 14px; color: #ccc;">还原步骤: <span id="solveStepText">准备中</span></p>
+        <p style="text-align: center; font-size: 14px; color: #ccc;"><span id="stepLabel">还原步骤</span>: <span id="solveStepText">准备中</span></p>
     </div>
 
     <!-- 侧边栏：设置与数据 -->
@@ -114,14 +123,14 @@
 
 <script>
 /** -------------------------------------------------------------
- *  1. 底层核心算法层 (保持 2D 状态机做底层校验)
+ *  1. 底层核心算法层
  *  ------------------------------------------------------------- */
 const FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
 let currentScramble = [], solveSteps = [], solveIndex = 0;
 let cubeState = new Array(54).fill(0);
 let colors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#ffa500', '#0000ff'];
+let animMode = 'solve';
 
-// 颜色绑定 (顺带直接更新 3D 材质)
 function updateColors() {
     colors = [
         document.getElementById('colU').value, document.getElementById('colR').value,
@@ -136,7 +145,6 @@ function updateColors() {
     }
 }
 
-// 精确的 2D 状态机旋转 (用来做逻辑兜底，防止 3D 浮点误差累积)
 function rotateFace(face) {
     const f = face * 9;
     const temp = [cubeState[f], cubeState[f+1], cubeState[f+2], cubeState[f+5], cubeState[f+8], cubeState[f+7], cubeState[f+6], cubeState[f+3]];
@@ -144,12 +152,12 @@ function rotateFace(face) {
     cubeState[f+5] = temp[1]; cubeState[f+8] = temp[2]; cubeState[f+7] = temp[3];
     cubeState[f+6] = temp[4]; cubeState[f+3] = temp[5];
     const adj = {
-        0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], // U
-        1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], // R
-        2: [[0,6,7,8], [1,0,3,6], [3,2,1,0], [4,8,5,2]], // F
-        3: [[2,6,7,8], [1,6,7,8], [5,6,7,8], [4,6,7,8]], // D
-        4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], // L
-        5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  // B
+        0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], 
+        1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], 
+        2: [[0,6,7,8], [1,0,3,6], [3,2,1,0], [4,8,5,2]], 
+        3: [[2,6,7,8], [1,6,7,8], [5,6,7,8], [4,6,7,8]], 
+        4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], 
+        5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  
     }[face];
     let edgeTemp = [cubeState[adj[0][0]*9 + adj[0][1]], cubeState[adj[0][0]*9 + adj[0][2]], cubeState[adj[0][0]*9 + adj[0][3]]];
     for (let i = 0; i < 3; i++) {
@@ -173,7 +181,6 @@ function getInverseMove(move) {
     return move + "'";
 }
 
-// 严谨的 WCA 规范打乱生成
 function generateScramble(length) {
     const moves = [], modifiers = ["", "'", "2"];
     let lastFace = -1, secLastFace = -1;
@@ -188,7 +195,7 @@ function generateScramble(length) {
 }
 
 /** -------------------------------------------------------------
- *  2. 渲染层 (2D + 真正 Three.js WebGL)
+ *  2. 渲染层 (2D + Three.js)
  *  ------------------------------------------------------------- */
 const ctx2D = document.getElementById('canvas2D').getContext('2d');
 function render2D() {
@@ -204,17 +211,12 @@ function render2D() {
     drawF(1, s*2, s); drawF(5, s*3, s); drawF(3, s, s*2);
 }
 
-// --- Three.js 核心初始化 ---
 let scene, camera, renderer, controls;
-let cubies = [];
-let pivot = new THREE.Group();
-let matDict = null;
+let cubies = [], pivot = new THREE.Group(), matDict = null;
 
 function init3D() {
     const container = document.getElementById('container3D');
     scene = new THREE.Scene();
-    
-    // 相机与 OrbitControls 配置 (允许拖拽)
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(4, 4, 6);
     
@@ -226,39 +228,32 @@ function init3D() {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enablePan = false; controls.enableZoom = false; controls.enableDamping = true;
 
-    // 材质映射字典
     matDict = {
-        U: new THREE.MeshBasicMaterial({ color: colors[0] }),
-        D: new THREE.MeshBasicMaterial({ color: colors[3] }),
-        F: new THREE.MeshBasicMaterial({ color: colors[2] }),
-        B: new THREE.MeshBasicMaterial({ color: colors[5] }),
-        R: new THREE.MeshBasicMaterial({ color: colors[1] }),
-        L: new THREE.MeshBasicMaterial({ color: colors[4] }),
-        K: new THREE.MeshBasicMaterial({ color: 0x111111 }) // 内层纯黑
+        U: new THREE.MeshBasicMaterial({ color: colors[0] }), D: new THREE.MeshBasicMaterial({ color: colors[3] }),
+        F: new THREE.MeshBasicMaterial({ color: colors[2] }), B: new THREE.MeshBasicMaterial({ color: colors[5] }),
+        R: new THREE.MeshBasicMaterial({ color: colors[1] }), L: new THREE.MeshBasicMaterial({ color: colors[4] }),
+        K: new THREE.MeshBasicMaterial({ color: 0x111111 }) 
     };
 
     function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
     animate();
 }
 
-// 重建绝对还原的 3D 魔方模型
 function createCube3D() {
     cubies.forEach(c => scene.remove(c));
     cubies = [];
-    const gap = 1.05; // 间距
+    const gap = 1.05; 
     const geo = new THREE.BoxGeometry(1, 1, 1);
     
     for (let x = -1; x <= 1; x++) {
         for (let y = -1; y <= 1; y++) {
             for (let z = -1; z <= 1; z++) {
-                // Three.js 材质数组顺序: +x(R), -x(L), +y(U), -y(D), +z(F), -z(B)
                 let mats = [
                     x === 1 ? matDict.R : matDict.K, x === -1 ? matDict.L : matDict.K,
                     y === 1 ? matDict.U : matDict.K, y === -1 ? matDict.D : matDict.K,
                     z === 1 ? matDict.F : matDict.K, z === -1 ? matDict.B : matDict.K
                 ];
                 const mesh = new THREE.Mesh(geo, mats);
-                // 加个黑色边框让 3D 效果更好看
                 const edges = new THREE.EdgesGeometry(geo);
                 const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
                 mesh.add(line);
@@ -270,24 +265,20 @@ function createCube3D() {
     }
 }
 
-// 执行 3D 旋转核心运算 (支持立即完成或平滑动画)
 let isAnimating = false;
 function applyTurn3D(face, modifier, instant = false, onComplete = null) {
     if(isAnimating && !instant) return;
     if(!instant) isAnimating = true;
 
-    // 旋转轴系与方向映射 (遵循右手螺旋定则)
     let axis = ['U','D'].includes(face) ? 'y' : (['R','L'].includes(face) ? 'x' : 'z');
     let sign = ['U','R','F'].includes(face) ? -1 : 1; 
     let turns = modifier === "'" ? -1 : (modifier === "2" ? 2 : 1);
     let targetAngle = sign * turns * (Math.PI / 2);
 
-    // 动态抓取当前处于该层的 色块(Cubie)
     const activeCubies = [];
     const threshold = 0.5;
     cubies.forEach(c => {
-        const pos = new THREE.Vector3();
-        c.getWorldPosition(pos);
+        const pos = new THREE.Vector3(); c.getWorldPosition(pos);
         if      (face === 'U' && pos.y > threshold) activeCubies.push(c);
         else if (face === 'D' && pos.y < -threshold) activeCubies.push(c);
         else if (face === 'R' && pos.x > threshold) activeCubies.push(c);
@@ -296,20 +287,18 @@ function applyTurn3D(face, modifier, instant = false, onComplete = null) {
         else if (face === 'B' && pos.z < -threshold) activeCubies.push(c);
     });
 
-    // 将选中的色块挂载到 pivot (旋转中枢)
     scene.add(pivot);
-    pivot.rotation.set(0,0,0);
-    pivot.position.set(0,0,0);
+    pivot.rotation.set(0,0,0); pivot.position.set(0,0,0);
     activeCubies.forEach(c => pivot.attach(c));
 
     if (instant) {
         pivot.rotation[axis] = targetAngle;
         pivot.updateMatrixWorld();
-        activeCubies.forEach(c => scene.attach(c)); // 脱离中枢并保留世界矩阵变换
+        activeCubies.forEach(c => scene.attach(c)); 
+        isAnimating = false;
         if (onComplete) onComplete();
     } else {
-        const duration = 250; 
-        const start = performance.now();
+        const duration = 250, start = performance.now();
         function tween() {
             let progress = (performance.now() - start) / duration;
             if (progress >= 1) {
@@ -319,9 +308,7 @@ function applyTurn3D(face, modifier, instant = false, onComplete = null) {
                 isAnimating = false;
                 if(onComplete) onComplete();
             } else {
-                // easeOut 平滑缓动效果
-                const ease = 1 - Math.pow(1 - progress, 3);
-                pivot.rotation[axis] = targetAngle * ease;
+                pivot.rotation[axis] = targetAngle * (1 - Math.pow(1 - progress, 3));
                 requestAnimationFrame(tween);
             }
         }
@@ -330,13 +317,42 @@ function applyTurn3D(face, modifier, instant = false, onComplete = null) {
 }
 
 /** -------------------------------------------------------------
- *  3. 播放器逻辑层 (包含自动播放队列与状态同步)
+ *  3. 播放器逻辑层 (支持复原与打乱模式)
  *  ------------------------------------------------------------- */
 let isAutoPlaying = false;
 
+function switchAnimMode() {
+    if(isAutoPlaying) toggleAutoPlay();
+    isAnimating = false; // 清除可能残留的动画锁
+    
+    animMode = document.getElementById('animMode').value;
+    solveIndex = 0;
+    
+    // 强制恢复全复原状态
+    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
+    createCube3D();
+
+    if (animMode === 'solve') {
+        // 如果是复原演示，步骤是打乱的反向。UI 起始状态需处于打乱后
+        solveSteps = [...currentScramble].reverse().map(getInverseMove);
+        currentScramble.forEach(move => {
+            doMove2D(move);
+            applyTurn3D(move[0], move[1] || '', true); // 瞬间执行打乱
+        });
+        document.getElementById('stepLabel').innerText = '还原步骤';
+    } else {
+        // 如果是打乱演示，步骤就是正向打乱。UI 起始处于复原状态
+        solveSteps = [...currentScramble];
+        document.getElementById('stepLabel').innerText = '打乱步骤';
+    }
+    
+    updateSolveText();
+    render2D();
+}
+
 function updateSolveText() {
     let t = solveSteps.map((s, i) => i === solveIndex ? `<span style="color:var(--accent); font-weight:bold;">${s}</span>` : s).join(" ");
-    if(solveIndex >= solveSteps.length) t += " (已还原)";
+    if(solveIndex >= solveSteps.length) t += animMode === 'solve' ? " (已还原)" : " (已打乱)";
     document.getElementById('solveStepText').innerHTML = t;
 }
 
@@ -346,20 +362,18 @@ function playStep(dir, autoCallback = null) {
     
     if (dir === 1 && solveIndex < solveSteps.length) {
         move = solveSteps[solveIndex];
-        doMove2D(move); // 2D 先行
+        doMove2D(move); 
         solveIndex++;
     } else if (dir === -1 && solveIndex > 0) {
         solveIndex--;
         move = getInverseMove(solveSteps[solveIndex]);
-        doMove2D(move); // 退回等于执行逆公式
+        doMove2D(move); 
     } else {
         return;
     }
     
     updateSolveText();
     render2D();
-    
-    // 执行 3D 动画
     applyTurn3D(move[0], move[1] || '', false, autoCallback);
 }
 
@@ -379,9 +393,7 @@ function toggleAutoPlay() {
 function playNextAuto() {
     if (!isAutoPlaying) return;
     if (solveIndex < solveSteps.length) {
-        playStep(1, () => {
-            if (isAutoPlaying) setTimeout(playNextAuto, 150); // 间隔一小会儿再播下一步
-        });
+        playStep(1, () => { if (isAutoPlaying) setTimeout(playNextAuto, 150); });
     } else {
         toggleAutoPlay();
     }
@@ -396,24 +408,12 @@ function generateNew() {
     currentScramble = generateScramble(len);
     document.getElementById('scrambleText').innerText = currentScramble.join(" ");
     
-    // 强制重置底层2D 与 3D模型（避免浮点误差累积）
-    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
-    createCube3D();
-    
-    // 瞬间打乱 3D 和 2D
-    currentScramble.forEach(move => {
-        doMove2D(move);
-        applyTurn3D(move[0], move[1] || '', true);
-    });
-    
-    solveSteps = [...currentScramble].reverse().map(getInverseMove);
-    solveIndex = 0;
-    updateSolveText();
-    render2D();
+    // 直接触发模式切换函数来初始化方块状态和播放列表
+    switchAnimMode();
 }
 
 /** -------------------------------------------------------------
- *  4. 计时器与数据持久化逻辑 (Cookie)
+ *  4. 计时器与数据持久化逻辑
  *  ------------------------------------------------------------- */
 let timerState = 'IDLE', startTime = 0, inspectTime = 0, timerInterval = null, records = [];
 
@@ -480,10 +480,9 @@ function stopTimer() {
     records.unshift(finalTime); saveCookies(); generateNew();
 }
 
-// 防止点击设置、按钮或 3D 视图时触发计时器
 function isValidTimerTarget(e) {
-    if(e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return false;
-    if(e.target.closest && e.target.closest('#container3D')) return false; // 排除 3D 拖拽区
+    if(e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'OPTION') return false;
+    if(e.target.closest && e.target.closest('#container3D')) return false; 
     return true;
 }
 
@@ -508,7 +507,7 @@ timeDisp.addEventListener('mousedown', handleInputDown); timeDisp.addEventListen
 timeDisp.addEventListener('touchstart', (e) => { e.preventDefault(); handleInputDown(e); });
 timeDisp.addEventListener('touchend', handleInputUp);
 
-// --- 初始化流 ---
+// --- 初始化 ---
 init3D();
 updateColors();
 getCookies();
