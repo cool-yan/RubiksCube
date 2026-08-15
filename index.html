@@ -2,1196 +2,475 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>魔方打乱生成器 · 修复版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原生逻辑魔方打乱与计时器</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
-            user-select: none;
+        :root {
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --text: #f0f0f0;
+            --accent: #4caf50;
         }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: #1a1e2c;
-            color: #eaeef2;
-            display: flex;
-            justify-content: center;
-            padding: 16px;
-        }
-        .app {
-            max-width: 1300px;
-            width: 100%;
-        }
-        h1 {
-            font-weight: 300;
-            letter-spacing: 2px;
-            font-size: 1.6rem;
-            margin: 8px 0 12px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        h1 small {
-            font-size: 0.9rem;
-            font-weight: 300;
-            opacity: 0.6;
-        }
-        .grid-main {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 18px;
-        }
-        .card {
-            background: #252b3d;
-            border-radius: 20px;
-            padding: 18px 20px 20px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-            border: 1px solid #3b435b;
-        }
-        .card-title {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            opacity: 0.5;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-        .flex-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 12px;
-        }
-        .flex-between {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        select,
-        input[type="number"],
-        input[type="color"] {
-            background: #121624;
-            border: 1px solid #3b435b;
-            color: #eaeef2;
-            padding: 8px 14px;
-            border-radius: 40px;
-            font-size: 0.9rem;
-            outline: none;
-            cursor: pointer;
-        }
-        input[type="color"] {
-            width: 36px;
-            height: 36px;
-            padding: 2px;
-            border-radius: 50%;
-        }
-        button {
-            background: #3b4b6b;
-            border: none;
-            color: #fff;
-            padding: 8px 20px;
-            border-radius: 40px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: 0.15s;
-            border: 1px solid transparent;
-        }
-        button:hover {
-            background: #4f6290;
-            transform: scale(0.97);
-        }
-        button.primary {
-            background: #4f7eb3;
-        }
-        button.primary:hover {
-            background: #6396cf;
-        }
-        button.danger {
-            background: #8f3b4b;
-        }
-        button.danger:hover {
-            background: #b34a5e;
-        }
-        button:active {
-            transform: scale(0.93);
-        }
-        .scramble-box {
-            background: #121624;
-            border-radius: 60px;
-            padding: 14px 24px;
-            font-size: 1.5rem;
-            letter-spacing: 2px;
-            font-family: 'Courier New', monospace;
-            word-break: break-all;
-            line-height: 1.6;
-            border: 1px solid #3b435b;
-            margin: 6px 0 12px;
-            min-height: 68px;
-        }
-        .canvas-wrap {
-            display: flex;
-            justify-content: center;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
-        .canvas-wrap canvas {
-            background: #121624;
-            border-radius: 16px;
-            border: 1px solid #3b435b;
-            width: 100%;
-            max-width: 360px;
-            height: auto;
-            aspect-ratio: 1/1;
-            image-rendering: crisp-edges;
-        }
-        .canvas-3d-wrap canvas {
-            max-width: 420px;
-        }
-        .timer-display {
-            font-size: 4.2rem;
-            font-weight: 200;
-            font-variant-numeric: tabular-nums;
-            letter-spacing: 4px;
-            background: #121624;
-            padding: 4px 24px;
-            border-radius: 60px;
-            display: inline-block;
-            border: 1px solid #3b435b;
-            min-width: 220px;
-            text-align: center;
-        }
-        .timer-btn {
-            background: #4f7eb3;
-            border: none;
-            color: #fff;
-            padding: 14px 32px;
-            border-radius: 60px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            width: 100%;
-            touch-action: none;
-            transition: 0.1s;
-            border: 1px solid transparent;
-        }
-        .timer-btn:active {
-            transform: scale(0.94);
-            background: #3b6291;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 8px 0;
-        }
-        .stats-item {
-            background: #121624;
-            border-radius: 12px;
-            padding: 8px 10px;
-            text-align: center;
-        }
-        .stats-item .num {
-            font-size: 1.8rem;
-            font-weight: 300;
-        }
-        .stats-item .label {
-            font-size: 0.65rem;
-            opacity: 0.5;
-            text-transform: uppercase;
-        }
-        .history-list {
-            max-height: 200px;
-            overflow-y: auto;
-            background: #121624;
-            border-radius: 16px;
-            padding: 6px 10px;
-            border: 1px solid #2f364a;
-            font-size: 0.85rem;
-            margin-top: 8px;
-        }
-        .history-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 4px;
-            border-bottom: 1px solid #2a3042;
-            align-items: center;
-        }
-        .history-item .del {
-            color: #c04a5e;
-            cursor: pointer;
-            font-weight: bold;
-            padding: 0 6px;
-        }
-        .player-controls {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-            margin-top: 8px;
-        }
-        .player-controls button {
-            padding: 6px 14px;
-            font-size: 1.2rem;
-            background: #2f364a;
-        }
-        .player-controls input[type="range"] {
-            flex: 1;
-            min-width: 80px;
-            accent-color: #4f7eb3;
-            background: #2f364a;
-            height: 4px;
-            border-radius: 4px;
-        }
-        .color-picker-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 16px;
-            align-items: center;
-        }
-        .color-picker-group label {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        .badge {
-            background: #2f364a;
-            padding: 2px 12px;
-            border-radius: 40px;
-            font-size: 0.8rem;
-        }
-        @media (max-width: 820px) {
-            .grid-main {
-                grid-template-columns: 1fr;
-            }
-            .timer-display {
-                font-size: 3rem;
-                min-width: 140px;
-            }
-            .canvas-wrap canvas {
-                max-width: 100%;
-            }
-        }
-        .hidden {
-            display: none !important;
-        }
-        .error-banner {
-            background: #a03a4a;
-            color: #fff;
-            padding: 18px;
-            border-radius: 20px;
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        ::-webkit-scrollbar {
-            width: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4f6290;
-            border-radius: 8px;
-        }
+        body { margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1200px; width: 100%; justify-content: center; }
+        .panel { background: var(--panel); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h2, h3 { margin-top: 0; color: #fff; }
+        
+        /* 计时器与打乱区 */
+        .scramble-box { text-align: center; font-size: 24px; letter-spacing: 2px; margin-bottom: 20px; font-weight: bold; color: #ffeb3b; min-height: 35px;}
+        .timer-display { font-size: 80px; font-family: monospace; text-align: center; margin: 20px 0; cursor: pointer; user-select: none; }
+        .timer-display.inspection { color: #f44336; }
+        
+        /* 视图区 */
+        .view-container { display: flex; gap: 20px; justify-content: center; align-items: flex-start; }
+        canvas { background: #222; border-radius: 8px; }
+        
+        /* 控制按钮 */
+        .controls { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
+        button { background: #444; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        button:hover { background: #555; }
+        button.primary { background: var(--accent); }
+        button.primary:hover { background: #45a049; }
+        
+        /* 设置与记录 */
+        .settings-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-bottom: 15px; }
+        input[type="color"] { border: none; width: 30px; height: 30px; cursor: pointer; background: none; }
+        select, input[type="number"] { background: #333; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; }
+        
+        .records-list { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 14px; }
+        .record-item { display: flex; justify-content: space-between; padding: 5px; border-bottom: 1px solid #444; }
+        .delete-btn { color: #ff4c4c; cursor: pointer; margin-left: 10px; }
     </style>
 </head>
 <body>
-    <div class="app" id="app">
-        <div id="errorBanner" class="error-banner hidden">❌ 魔方转动逻辑自检失败！请刷新页面重试。</div>
-        <h1>🧩 魔方打乱器 <small>WCA 风格 · 引擎已修复</small></h1>
 
-        <div class="grid-main">
-            <!-- 左列 -->
+<div class="scramble-box" id="scrambleText">R U R' U' ...</div>
+
+<div class="container">
+    <!-- 主交互区 -->
+    <div class="panel" style="flex: 2; min-width: 300px;">
+        <div class="timer-display" id="timeDisplay">0.000</div>
+        <p style="text-align: center; color: #aaa; font-size: 14px;">长按空格/点击时间开始 15 秒倒计时，松开开始计时，再按停止</p>
+        
+        <div class="view-container">
             <div>
-                <div class="card">
-                    <div class="card-title">⚡ 打乱生成</div>
-                    <div class="flex-row">
-                        <label>步数
-                            <select id="scrambleLen">
-                                <option value="15">15</option>
-                                <option value="20" selected>20</option>
-                                <option value="25">25</option>
-                            </select>
-                        </label>
-                        <button class="primary" id="genScrambleBtn">🔄 生成新打乱</button>
-                        <button id="resetCubeBtn">↺ 重置魔方</button>
-                    </div>
-                    <div class="scramble-box" id="scrambleDisplay">R U R' U'</div>
-                </div>
-
-                <div class="card" style="margin-top: 18px;">
-                    <div class="card-title">📐 展开图 (十字)</div>
-                    <div class="canvas-wrap">
-                        <canvas id="flatCanvas" width="400" height="400"></canvas>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-top: 18px;">
-                    <div class="card-title">🎨 配色自定义</div>
-                    <div class="color-picker-group" id="colorPickerGroup"></div>
-                </div>
+                <h3 style="font-size: 16px; text-align: center;">2D 展开图</h3>
+                <canvas id="canvas2D" width="240" height="180"></canvas>
             </div>
-
-            <!-- 右列 -->
             <div>
-                <div class="card">
-                    <div class="card-title">🧊 3D 透视预览</div>
-                    <div class="canvas-wrap canvas-3d-wrap">
-                        <canvas id="cube3dCanvas" width="500" height="500"></canvas>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-top: 18px;">
-                    <div class="card-title">⏱️ 计时器</div>
-                    <div class="flex-between">
-                        <span class="timer-display" id="timerDisplay">0.00</span>
-                        <span class="badge" id="timerStateLabel">就绪</span>
-                    </div>
-                    <div style="margin: 12px 0 6px;">
-                        <button class="timer-btn" id="timerBtn">按住开始倒计时 (空格)</button>
-                    </div>
-                    <div style="font-size:0.8rem; opacity:0.5; text-align:center;">
-                        电脑: 按住空格倒计时15s · 松开开始 · 再按停止
-                    </div>
-                </div>
-
-                <div class="card" style="margin-top: 18px;">
-                    <div class="card-title">📊 成绩统计</div>
-                    <div class="flex-row">
-                        <label>统计范围
-                            <select id="statsRange">
-                                <option value="5">最近5次</option>
-                                <option value="12" selected>最近12次</option>
-                                <option value="50">最近50次</option>
-                                <option value="100">最近100次</option>
-                                <option value="all">全部</option>
-                            </select>
-                        </label>
-                        <button id="clearHistoryBtn" class="danger">清空记录</button>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stats-item"><div class="num" id="statCount">0</div><div class="label">总次数</div></div>
-                        <div class="stats-item"><div class="num" id="statAvg">--</div><div class="label">平均</div></div>
-                        <div class="stats-item"><div class="num" id="statBest">--</div><div class="label">最好</div></div>
-                    </div>
-                    <div class="history-list" id="historyList"></div>
-                </div>
-
-                <div class="card" style="margin-top: 18px;">
-                    <div class="card-title">🎬 还原播放器 (打乱逆序)</div>
-                    <div class="player-controls">
-                        <button id="playFirstBtn">⏮</button>
-                        <button id="playPrevBtn">◀</button>
-                        <button id="playToggleBtn">▶</button>
-                        <button id="playNextBtn">▶</button>
-                        <button id="playLastBtn">⏭</button>
-                        <span style="font-size:0.8rem; opacity:0.6;" id="playStepIndicator">0 / 0</span>
-                    </div>
-                    <div class="flex-row" style="margin-top:6px;">
-                        <span style="font-size:0.75rem; opacity:0.6;">速度</span>
-                        <input type="range" id="playSpeedRange" min="200" max="1500" value="600" step="50">
-                        <span style="font-size:0.75rem; opacity:0.6;" id="playSpeedLabel">0.6s</span>
-                    </div>
-                </div>
+                <h3 style="font-size: 16px; text-align: center;">伪 3D 跟做视图</h3>
+                <canvas id="canvas3D" width="200" height="180"></canvas>
             </div>
         </div>
+
+        <div class="controls">
+            <button onclick="playStep(-1)">◀ 上一步</button>
+            <button onclick="toggleAutoPlay()" id="playBtn">▶ 自动播放还原</button>
+            <button onclick="playStep(1)">下一步 ▶</button>
+        </div>
+        <p style="text-align: center; font-size: 12px; color: #888;">当前还原步骤: <span id="solveStepText">准备中</span></p>
     </div>
 
-    <script>
-        // ============================================================
-        //  1. 魔方状态引擎 (重构版，自检通过)
-        // ============================================================
-        const FACES = ['U', 'D', 'F', 'B', 'L', 'R'];
-        const INIT_COLORS = ['#ffffff', '#ffd500', '#00b74a', '#0046ad', '#ff5800', '#cf1b2b'];
+    <!-- 侧边栏：设置与数据 -->
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 250px;">
+        <div class="panel">
+            <h3>偏好设置</h3>
+            <div class="settings-grid">
+                <label>打乱步数:</label>
+                <select id="scrambleLength" onchange="generateNew()">
+                    <option value="15">15 步</option>
+                    <option value="20" selected>20 步</option>
+                    <option value="25">25 步</option>
+                </select>
+                <label>配色 (U,D,F,B,L,R):</label>
+                <div style="display:flex; gap:2px;">
+                    <input type="color" id="colU" value="#ffffff" onchange="updateColors()">
+                    <input type="color" id="colD" value="#ffff00" onchange="updateColors()">
+                    <input type="color" id="colF" value="#00ff00" onchange="updateColors()">
+                    <input type="color" id="colB" value="#0000ff" onchange="updateColors()">
+                    <input type="color" id="colL" value="#ffa500" onchange="updateColors()">
+                    <input type="color" id="colR" value="#ff0000" onchange="updateColors()">
+                </div>
+            </div>
+            <button class="primary" style="width: 100%;" onclick="generateNew()">生成新打乱</button>
+        </div>
 
-        function createInitState() {
-            const s = {};
-            for (const f of FACES) {
-                s[f] = [
-                    [f, f, f],
-                    [f, f, f],
-                    [f, f, f]
-                ];
-            }
-            return s;
+        <div class="panel">
+            <h3>成绩记录</h3>
+            <div style="font-size: 14px; margin-bottom: 10px;">
+                PB: <span id="pbText" style="color:var(--accent); font-weight:bold;">--</span> | 
+                Ao5: <span id="ao5Text">--</span><br>
+                总计: <span id="totalCount">0</span> 次
+            </div>
+            <div class="records-list" id="recordsList"></div>
+            <button style="width: 100%; margin-top: 10px; background: #5a2a2a;" onclick="clearRecords()">清空记录</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * 核心逻辑层：使用单维数组模拟 6 面 * 9 贴纸 = 54 个状态位
+ * 面索引映射: U:0, R:1, F:2, D:3, L:4, B:5
+ */
+const FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
+let currentScramble = [];
+let solveSteps = [];
+let solveIndex = 0;
+let cubeState = new Array(54).fill(0);
+let colors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#ffa500', '#0000ff'];
+
+// 颜色绑定
+function updateColors() {
+    colors = [
+        document.getElementById('colU').value,
+        document.getElementById('colR').value,
+        document.getElementById('colF').value,
+        document.getElementById('colD').value,
+        document.getElementById('colL').value,
+        document.getElementById('colB').value
+    ];
+    render2D();
+    render3D();
+}
+
+// 核心：魔方旋转算法 (90度顺时针)
+// 这个循环映射非常考验数据结构的精确度
+function rotateFace(face) {
+    const f = face * 9;
+    // 面上的 8 个贴纸顺时针循环
+    const temp = [cubeState[f], cubeState[f+1], cubeState[f+2], cubeState[f+5], cubeState[f+8], cubeState[f+7], cubeState[f+6], cubeState[f+3]];
+    cubeState[f] = temp[6]; cubeState[f+1] = temp[7]; cubeState[f+2] = temp[0];
+    cubeState[f+5] = temp[1]; cubeState[f+8] = temp[2]; cubeState[f+7] = temp[3];
+    cubeState[f+6] = temp[4]; cubeState[f+3] = temp[5];
+
+    // 邻边循环映射
+    const adj = {
+        0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], // U
+        1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], // R
+        2: [[0,6,7,8], [1,0,3,6], [3,2,1,0], [4,8,5,2]], // F
+        3: [[2,6,7,8], [1,6,7,8], [5,6,7,8], [4,6,7,8]], // D
+        4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], // L
+        5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  // B
+    }[face];
+
+    let edgeTemp = [cubeState[adj[0][0]*9 + adj[0][1]], cubeState[adj[0][0]*9 + adj[0][2]], cubeState[adj[0][0]*9 + adj[0][3]]];
+    for (let i = 0; i < 3; i++) {
+        cubeState[adj[0][0]*9 + adj[0][i+1]] = cubeState[adj[3][0]*9 + adj[3][i+1]];
+        cubeState[adj[3][0]*9 + adj[3][i+1]] = cubeState[adj[2][0]*9 + adj[2][i+1]];
+        cubeState[adj[2][0]*9 + adj[2][i+1]] = cubeState[adj[1][0]*9 + adj[1][i+1]];
+        cubeState[adj[1][0]*9 + adj[1][i+1]] = edgeTemp[i];
+    }
+}
+
+function doMove(moveStr) {
+    const faceStr = moveStr[0];
+    const modifier = moveStr[1] || '';
+    const faceIdx = FACES.indexOf(faceStr);
+    let turns = modifier === "'" ? 3 : (modifier === "2" ? 2 : 1);
+    for(let i=0; i<turns; i++) rotateFace(faceIdx);
+}
+
+// 还原逻辑（直接取逆向公式作为新手"最速跟做"）
+function getInverseMove(move) {
+    if (move.includes("'")) return move[0];
+    if (move.includes("2")) return move;
+    return move + "'";
+}
+
+// WCA 打乱生成器
+function generateScramble(length) {
+    const moves = [];
+    const modifiers = ["", "'", "2"];
+    let lastFace = -1;
+    let secLastFace = -1;
+    
+    for (let i = 0; i < length; i++) {
+        let face;
+        do {
+            face = Math.floor(Math.random() * 6);
+        // 避免同面连续（如 R R），避免同轴往复（如 R L R）
+        } while (face === lastFace || (Math.floor(face / 2) === Math.floor(lastFace / 2) && face === secLastFace));
+        
+        secLastFace = lastFace;
+        lastFace = face;
+        moves.push(FACES[face] + modifiers[Math.floor(Math.random() * 3)]);
+    }
+    return moves;
+}
+
+function resetCube() {
+    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
+}
+
+function generateNew() {
+    const len = parseInt(document.getElementById('scrambleLength').value);
+    currentScramble = generateScramble(len);
+    document.getElementById('scrambleText').innerText = currentScramble.join(" ");
+    
+    resetCube();
+    currentScramble.forEach(doMove);
+    
+    // 生成逆序还原步骤
+    solveSteps = [...currentScramble].reverse().map(getInverseMove);
+    solveIndex = 0;
+    updateSolveText();
+    
+    render2D();
+    render3D();
+}
+
+/**
+ * UI 与 渲染层
+ */
+const ctx2D = document.getElementById('canvas2D').getContext('2d');
+const ctx3D = document.getElementById('canvas3D').getContext('2d');
+
+function drawFace2D(ctx, faceIdx, offsetX, offsetY, size) {
+    const f = faceIdx * 9;
+    const s = size / 3;
+    for(let i=0; i<9; i++) {
+        let r = Math.floor(i / 3), c = i % 3;
+        ctx.fillStyle = colors[cubeState[f + i]];
+        ctx.fillRect(offsetX + c*s, offsetY + r*s, s-1, s-1);
+    }
+}
+
+function render2D() {
+    ctx2D.clearRect(0, 0, 240, 180);
+    const s = 45; 
+    // 经典十字网格排布 U:0, L:4, F:2, R:1, B:5, D:3
+    drawFace2D(ctx2D, 0, s, 0, s);    // U
+    drawFace2D(ctx2D, 4, 0, s, s);    // L
+    drawFace2D(ctx2D, 2, s, s, s);    // F
+    drawFace2D(ctx2D, 1, s*2, s, s);  // R
+    drawFace2D(ctx2D, 5, s*3, s, s);  // B
+    drawFace2D(ctx2D, 3, s, s*2, s);  // D
+}
+
+// 纯 Canvas 伪 3D 渲染 (等距视角投影)
+function render3D() {
+    ctx3D.clearRect(0, 0, 200, 180);
+    ctx3D.save();
+    ctx3D.translate(100, 40); // 视角中心
+    const s = 30; // 贴纸基准大小
+
+    // 画 U 面 (倾斜与旋转)
+    ctx3D.save();
+    ctx3D.transform(1, 0.5, -1, 0.5, 0, 0);
+    for(let i=0; i<9; i++) {
+        let r = Math.floor(i/3), c = i%3;
+        ctx3D.fillStyle = colors[cubeState[0*9 + i]];
+        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
+    }
+    ctx3D.restore();
+
+    // 画 F 面
+    ctx3D.save();
+    ctx3D.translate(-s*3, s*1.5);
+    ctx3D.transform(1, -0.5, 0, 1, 0, 0);
+    for(let i=0; i<9; i++) {
+        let r = Math.floor(i/3), c = i%3;
+        ctx3D.fillStyle = colors[cubeState[2*9 + i]];
+        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
+    }
+    ctx3D.restore();
+
+    // 画 R 面
+    ctx3D.save();
+    ctx3D.translate(0, s*1.5);
+    ctx3D.transform(1, 0.5, 0, 1, 0, 0);
+    for(let i=0; i<9; i++) {
+        let r = Math.floor(i/3), c = i%3;
+        ctx3D.fillStyle = colors[cubeState[1*9 + i]];
+        ctx3D.fillRect(c*s, r*s, s-1.5, s-1.5);
+    }
+    ctx3D.restore();
+    
+    ctx3D.restore();
+}
+
+/**
+ * 播放器逻辑
+ */
+let autoPlayInterval = null;
+
+function updateSolveText() {
+    let t = solveSteps.map((s, i) => i === solveIndex ? `<span style="color:var(--accent); font-weight:bold;">${s}</span>` : s).join(" ");
+    if(solveIndex >= solveSteps.length) t += " (已还原)";
+    document.getElementById('solveStepText').innerHTML = t;
+}
+
+function playStep(dir) {
+    if(dir === 1 && solveIndex < solveSteps.length) {
+        doMove(solveSteps[solveIndex]);
+        solveIndex++;
+    } else if (dir === -1 && solveIndex > 0) {
+        solveIndex--;
+        doMove(getInverseMove(solveSteps[solveIndex])); // 回退是做逆向的逆向
+    }
+    updateSolveText();
+    render2D();
+    render3D();
+    
+    if(solveIndex >= solveSteps.length && autoPlayInterval) toggleAutoPlay();
+}
+
+function toggleAutoPlay() {
+    const btn = document.getElementById('playBtn');
+    if (autoPlayInterval) {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        btn.innerText = "▶ 自动播放还原";
+    } else {
+        if(solveIndex >= solveSteps.length) return; // 已经拼好
+        btn.innerText = "⏸ 暂停";
+        autoPlayInterval = setInterval(() => playStep(1), 800);
+    }
+}
+
+/**
+ * 计时器与数据持久化逻辑 (Cookie)
+ */
+let timerState = 'IDLE'; // IDLE, INSPECT, RUNNING
+let startTime = 0;
+let inspectTime = 0;
+let timerInterval = null;
+let records = [];
+
+function getCookies() {
+    const match = document.cookie.match(new RegExp('(^| )rubikRecords=([^;]+)'));
+    if (match) records = JSON.parse(decodeURIComponent(match[2]));
+    updateRecordsUI();
+}
+
+function saveCookies() {
+    document.cookie = `rubikRecords=${encodeURIComponent(JSON.stringify(records))}; path=/; max-age=31536000`; // 保存1年
+    updateRecordsUI();
+}
+
+function formatTime(ms) {
+    return (ms / 1000).toFixed(3);
+}
+
+function updateRecordsUI() {
+    const list = document.getElementById('recordsList');
+    list.innerHTML = '';
+    
+    if (records.length === 0) {
+        document.getElementById('pbText').innerText = "--";
+        document.getElementById('ao5Text').innerText = "--";
+        document.getElementById('totalCount').innerText = "0";
+        return;
+    }
+
+    let pb = Math.min(...records);
+    document.getElementById('pbText').innerText = formatTime(pb);
+    document.getElementById('totalCount').innerText = records.length;
+    
+    // 计算 Ao5（去掉一个最高分，一个最低分）
+    if(records.length >= 5) {
+        let last5 = records.slice(0, 5).sort((a,b)=>a-b);
+        let ao5 = (last5[1] + last5[2] + last5[3]) / 3;
+        document.getElementById('ao5Text').innerText = formatTime(ao5);
+    } else {
+        document.getElementById('ao5Text').innerText = "--";
+    }
+
+    records.forEach((rec, idx) => {
+        let div = document.createElement('div');
+        div.className = 'record-item';
+        div.innerHTML = `<span>${records.length - idx}. ${formatTime(rec)}s</span>
+                         <span class="delete-btn" onclick="deleteRecord(${idx})">x</span>`;
+        list.appendChild(div);
+    });
+}
+
+function deleteRecord(idx) {
+    records.splice(idx, 1);
+    saveCookies();
+}
+
+function clearRecords() {
+    if(confirm("确定要清空所有历史成绩吗？")) {
+        records = [];
+        saveCookies();
+    }
+}
+
+// 计时器主函数
+function startInspection() {
+    if(timerState !== 'IDLE') return;
+    timerState = 'INSPECT';
+    inspectTime = 15;
+    document.getElementById('timeDisplay').innerText = inspectTime;
+    document.getElementById('timeDisplay').classList.add('inspection');
+    
+    timerInterval = setInterval(() => {
+        inspectTime--;
+        if(inspectTime > 0) {
+            document.getElementById('timeDisplay').innerText = inspectTime;
+        } else {
+            // 倒计时结束，自动开始计时
+            startTimer();
         }
+    }, 1000);
+}
 
-        function cloneState(s) {
-            const ns = {};
-            for (const f of FACES) {
-                ns[f] = s[f].map(row => [...row]);
-            }
-            return ns;
-        }
+function startTimer() {
+    if(timerState === 'RUNNING') return;
+    clearInterval(timerInterval);
+    timerState = 'RUNNING';
+    startTime = performance.now();
+    document.getElementById('timeDisplay').classList.remove('inspection');
+    
+    timerInterval = setInterval(() => {
+        document.getElementById('timeDisplay').innerText = formatTime(performance.now() - startTime);
+    }, 10);
+}
 
-        // 辅助：获取/设置行/列，并支持反转
-        function getRow(face, row) { return face[row].slice(); }
+function stopTimer() {
+    if(timerState !== 'RUNNING') return;
+    clearInterval(timerInterval);
+    timerState = 'IDLE';
+    let finalTime = performance.now() - startTime;
+    document.getElementById('timeDisplay').innerText = formatTime(finalTime);
+    
+    // 保存成绩并自动打乱下一个
+    records.unshift(finalTime);
+    saveCookies();
+    generateNew();
+}
 
-        function setRow(face, row, arr) { face[row] = arr.slice(); }
+// 事件监听：处理空格与触屏
+function handleInputDown(e) {
+    if (e.code === 'Space' || e.type === 'touchstart' || e.type === 'mousedown') {
+        if(e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') return; // 防止冲突
+        if (timerState === 'IDLE') startInspection();
+        else if (timerState === 'RUNNING') stopTimer();
+    }
+}
 
-        function getCol(face, col) { return [face[0][col], face[1][col], face[2][col]]; }
+function handleInputUp(e) {
+    if (e.code === 'Space' || e.type === 'touchend' || e.type === 'mouseup') {
+        if (timerState === 'INSPECT') startTimer();
+    }
+}
 
-        function setCol(face, col, arr) { face[0][col] = arr[0];
-            face[1][col] = arr[1];
-            face[2][col] = arr[2]; }
+window.addEventListener('keydown', (e) => { if(e.code==='Space') e.preventDefault(); handleInputDown(e); });
+window.addEventListener('keyup', handleInputUp);
 
-        function reverse(arr) { return [arr[2], arr[1], arr[0]]; }
+const timeDisp = document.getElementById('timeDisplay');
+timeDisp.addEventListener('mousedown', handleInputDown);
+timeDisp.addEventListener('mouseup', handleInputUp);
+timeDisp.addEventListener('touchstart', (e) => { e.preventDefault(); handleInputDown(e); });
+timeDisp.addEventListener('touchend', handleInputUp);
 
-        // 面自身旋转 (顺时针)
-        function rotateFaceCW(face) {
-            const n = 3;
-            const res = face.map(row => [...row]);
-            for (let r = 0; r < n; r++) {
-                for (let c = 0; c < n; c++) {
-                    res[c][n - 1 - r] = face[r][c];
-                }
-            }
-            return res;
-        }
+// 初始化
+updateColors();
+getCookies();
+generateNew();
 
-        // 核心转动：应用单个动作 (如 "R", "R'", "R2")
-        function applyMove(state, move) {
-            let s = cloneState(state);
-            const face = move[0];
-            let dir = 1;
-            if (move.includes("'")) dir = -1;
-            if (move.includes("2")) dir = 2;
-            const repeat = (dir === 2) ? 2 : 1;
-            const d = (dir === 2) ? 1 : dir;
-
-            for (let t = 0; t < repeat; t++) {
-                s = applySingleMove(s, face, d);
-            }
-            return s;
-        }
-
-        function applySingleMove(s, f, d) {
-            const ns = cloneState(s);
-            // 旋转目标面
-            let fface = ns[f];
-            for (let i = 0; i < ((d % 4) + 4) % 4; i++) {
-                fface = rotateFaceCW(fface);
-            }
-            ns[f] = fface;
-
-            // 边缘交换：定义每个面顺时针(d=1)时的边缘循环
-            // 每个条目: [源面, 边缘类型, 是否反转], 顺序为循环: 面1->面2->面3->面4->面1
-            const cycles = {
-                'R': [
-                    ['U', 'right', false],
-                    ['F', 'right', false],
-                    ['D', 'right', false],
-                    ['B', 'left', true]
-                ],
-                'L': [
-                    ['U', 'left', false],
-                    ['B', 'right', true],
-                    ['D', 'left', false],
-                    ['F', 'left', false]
-                ],
-                'U': [
-                    ['F', 'top', false],
-                    ['R', 'top', false],
-                    ['B', 'top', false],
-                    ['L', 'top', false]
-                ],
-                'D': [
-                    ['F', 'bottom', false],
-                    ['L', 'bottom', false],
-                    ['B', 'bottom', false],
-                    ['R', 'bottom', false]
-                ],
-                'F': [
-                    ['U', 'bottom', false],
-                    ['R', 'left', false],
-                    ['D', 'bottom', false],
-                    ['L', 'right', true]
-                ],
-                'B': [
-                    ['U', 'top', false],
-                    ['L', 'left', false],
-                    ['D', 'top', false],
-                    ['R', 'right', true]
-                ]
-            };
-
-            const cycle = cycles[f];
-            if (!cycle) return ns;
-
-            // 提取四个边缘值
-            const extract = (face, edge, rev) => {
-                let arr;
-                if (edge === 'top') arr = getRow(ns[face], 0);
-                else if (edge === 'bottom') arr = getRow(ns[face], 2);
-                else if (edge === 'left') arr = getCol(ns[face], 0);
-                else if (edge === 'right') arr = getCol(ns[face], 2);
-                if (rev) arr = reverse(arr);
-                return arr;
-            };
-            const assign = (face, edge, arr, rev) => {
-                if (rev) arr = reverse(arr);
-                if (edge === 'top') setRow(ns[face], 0, arr);
-                else if (edge === 'bottom') setRow(ns[face], 2, arr);
-                else if (edge === 'left') setCol(ns[face], 0, arr);
-                else if (edge === 'right') setCol(ns[face], 2, arr);
-            };
-
-            // 提取原始值
-            const vals = cycle.map(([f, e, r]) => extract(f, e, r));
-
-            // 根据方向循环
-            if (d === 1) { // 顺时针
-                // vals[0] -> vals[1], vals[1]->vals[2], vals[2]->vals[3], vals[3]->vals[0]
-                for (let i = 0; i < 4; i++) {
-                    const [f, e, r] = cycle[(i + 1) % 4];
-                    assign(f, e, vals[i], r);
-                }
-            } else { // 逆时针
-                // vals[0] <- vals[1], vals[1]<-vals[2], vals[2]<-vals[3], vals[3]<-vals[0]
-                for (let i = 0; i < 4; i++) {
-                    const [f, e, r] = cycle[i];
-                    assign(f, e, vals[(i + 1) % 4], r);
-                }
-            }
-
-            return ns;
-        }
-
-        // ---------- 自检 ----------
-        function selfTest() {
-            const init = createInitState();
-            // 测试1: (R U R' U') 重复6次应还原
-            let s = cloneState(init);
-            const moves = ['R', 'U', "R'", "U'"];
-            for (let i = 0; i < 6; i++) {
-                for (const m of moves) {
-                    s = applyMove(s, m);
-                }
-            }
-            const eq = (a, b) => {
-                for (const f of FACES) {
-                    for (let r = 0; r < 3; r++)
-                        for (let c = 0; c < 3; c++) {
-                            if (a[f][r][c] !== b[f][r][c]) return false;
-                        }
-                }
-                return true;
-            };
-            if (!eq(s, init)) return false;
-
-            // 测试2: T型公式 (R U R' U' R' F R F') 做两次应还原
-            s = cloneState(init);
-            const tMoves = ['R', 'U', "R'", "U'", "R'", 'F', 'R', "F'"];
-            for (let i = 0; i < 2; i++) {
-                for (const m of tMoves) {
-                    s = applyMove(s, m);
-                }
-            }
-            if (!eq(s, init)) return false;
-
-            // 测试3: 单个R四次还原
-            s = cloneState(init);
-            for (let i = 0; i < 4; i++) s = applyMove(s, 'R');
-            if (!eq(s, init)) return false;
-
-            return true;
-        }
-
-        // ============================================================
-        //  2. 打乱生成器
-        // ============================================================
-        function generateScramble(length) {
-            const faces = ['R', 'L', 'U', 'D', 'F', 'B'];
-            const modifiers = ['', "'", '2'];
-            const last = { face: '', axis: '' };
-            const moves = [];
-            const axisMap = { R: 'x', L: 'x', U: 'y', D: 'y', F: 'z', B: 'z' };
-            for (let i = 0; i < length; i++) {
-                let face, mod, move;
-                let attempts = 0;
-                do {
-                    face = faces[Math.floor(Math.random() * faces.length)];
-                    mod = modifiers[Math.floor(Math.random() * modifiers.length)];
-                    move = face + mod;
-                    attempts++;
-                    if (attempts > 100) break;
-                } while (
-                    (face === last.face) ||
-                    (axisMap[face] === last.axis && face !== last.face && last.face !== '')
-                );
-                moves.push(move);
-                last.face = face;
-                last.axis = axisMap[face];
-            }
-            return moves;
-        }
-
-        // ============================================================
-        //  3. 全局状态
-        // ============================================================
-        let currentState = createInitState();
-        let currentScramble = [];
-        let colorMap = { U: '#ffffff', D: '#ffd500', F: '#00b74a', B: '#0046ad', L: '#ff5800', R: '#cf1b2b' };
-
-        // 计时器
-        let timerState = 'IDLE';
-        let timerValue = 0;
-        let countdownValue = 15;
-        let timerInterval = null,
-            countdownInterval = null;
-        let timerStartTime = 0;
-
-        // 播放器
-        let playMoves = [];
-        let playIndex = 0;
-        let playInterval = null;
-        let isPlaying = false;
-        let playSpeed = 600;
-
-        // 成绩
-        let history = [];
-
-        // ============================================================
-        //  4. 渲染
-        // ============================================================
-        function drawFlat(state) {
-            const canvas = document.getElementById('flatCanvas');
-            const ctx = canvas.getContext('2d');
-            const W = canvas.width,
-                H = canvas.height;
-            ctx.clearRect(0, 0, W, H);
-            const size = 42,
-                gap = 3,
-                cell = size + gap;
-            const offX = (W - cell * 4) / 2,
-                offY = (H - cell * 3) / 2;
-            const pos = { U: [0, 2], L: [1, 0], F: [1, 1], R: [1, 2], B: [1, 3], D: [2, 2] };
-            for (const name of FACES) {
-                const [r, c] = pos[name];
-                const x = offX + c * cell,
-                    y = offY + r * cell;
-                const face = state[name];
-                for (let i = 0; i < 3; i++) {
-                    for (let j = 0; j < 3; j++) {
-                        const label = face[i][j];
-                        const color = colorMap[label] || '#888';
-                        ctx.fillStyle = color;
-                        ctx.fillRect(x + j * (size + gap), y + i * (size + gap), size, size);
-                        ctx.strokeStyle = '#1a1e2c';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x + j * (size + gap), y + i * (size + gap), size, size);
-                    }
-                }
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 14px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
-                ctx.fillText(name, x + cell / 2, y - 18);
-            }
-        }
-
-        function draw3D(state) {
-            const canvas = document.getElementById('cube3dCanvas');
-            const ctx = canvas.getContext('2d');
-            const W = canvas.width,
-                H = canvas.height;
-            ctx.clearRect(0, 0, W, H);
-            const camPos = { x: 3.8, y: 2.8, z: 4.2 };
-            const target = { x: 0, y: 0, z: 0 };
-            const up = { x: 0, y: 1, z: 0 };
-            const norm = (v) => { const l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z); return { x: v.x / l, y: v.y /
-                        l, z: v.z / l }; };
-            const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
-            const cross = (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
-            const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
-            const view = (() => {
-                const zAxis = norm(sub(camPos, target));
-                const xAxis = norm(cross(up, zAxis));
-                const yAxis = cross(zAxis, xAxis);
-                return { xAxis, yAxis, zAxis };
-            })();
-            const fov = 600;
-            const project = (p) => {
-                const rel = { x: p.x - camPos.x, y: p.y - camPos.y, z: p.z - camPos.z };
-                const x = dot(rel, view.xAxis);
-                const y = dot(rel, view.yAxis);
-                const z = dot(rel, view.zAxis);
-                if (z < 0.1) return null;
-                const scale = fov / z;
-                return { x: W / 2 + x * scale, y: H / 2 - y * scale, z: z };
-            };
-            const half = 0.45;
-            const allFaces = [];
-            for (let x = -1; x <= 1; x++) {
-                for (let y = -1; y <= 1; y++) {
-                    for (let z = -1; z <= 1; z++) {
-                        const center = { x, y, z };
-                        const faceDefs = [
-                            { axis: 'x', val: 1, label: 'R' },
-                            { axis: 'x', val: -1, label: 'L' },
-                            { axis: 'y', val: 1, label: 'U' },
-                            { axis: 'y', val: -1, label: 'D' },
-                            { axis: 'z', val: 1, label: 'F' },
-                            { axis: 'z', val: -1, label: 'B' }
-                        ];
-                        for (const fd of faceDefs) {
-                            let label = null;
-                            if (fd.axis === 'x' && x === fd.val) label = state[fd.label][y + 1]?.[z + 1];
-                            else if (fd.axis === 'y' && y === fd.val) label = state[fd.label][x + 1]?.[z + 1];
-                            else if (fd.axis === 'z' && z === fd.val) label = state[fd.label][x + 1]?.[y + 1];
-                            if (!label) continue;
-                            const col = colorMap[label] || '#888';
-                            const n = { x: 0, y: 0, z: 0 };
-                            if (fd.axis === 'x') n.x = fd.val;
-                            if (fd.axis === 'y') n.y = fd.val;
-                            if (fd.axis === 'z') n.z = fd.val;
-                            const relEye = sub(camPos, center);
-                            if (dot(n, relEye) < 0) continue;
-                            let pts;
-                            const s = half;
-                            if (fd.axis === 'x') {
-                                pts = [
-                                    { x: center.x, y: center.y - s, z: center.z - s },
-                                    { x: center.x, y: center.y + s, z: center.z - s },
-                                    { x: center.x, y: center.y + s, z: center.z + s },
-                                    { x: center.x, y: center.y - s, z: center.z + s }
-                                ];
-                            } else if (fd.axis === 'y') {
-                                pts = [
-                                    { x: center.x - s, y: center.y, z: center.z - s },
-                                    { x: center.x + s, y: center.y, z: center.z - s },
-                                    { x: center.x + s, y: center.y, z: center.z + s },
-                                    { x: center.x - s, y: center.y, z: center.z + s }
-                                ];
-                            } else {
-                                pts = [
-                                    { x: center.x - s, y: center.y - s, z: center.z },
-                                    { x: center.x + s, y: center.y - s, z: center.z },
-                                    { x: center.x + s, y: center.y + s, z: center.z },
-                                    { x: center.x - s, y: center.y + s, z: center.z }
-                                ];
-                            }
-                            const proj = pts.map(p => project(p));
-                            if (proj.some(p => p === null)) continue;
-                            const zAvg = proj.reduce((a, b) => a + b.z, 0) / 4;
-                            allFaces.push({ pts: proj.map(p => ({ x: p.x, y: p.y })), color: col, z: zAvg });
-                        }
-                    }
-                }
-            }
-            allFaces.sort((a, b) => b.z - a.z);
-            for (const f of allFaces) {
-                ctx.fillStyle = f.color;
-                ctx.strokeStyle = '#1a1e2c';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.moveTo(f.pts[0].x, f.pts[0].y);
-                for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i].x, f.pts[i].y);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-            }
-            ctx.fillStyle = '#ffffff40';
-            ctx.font = '14px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText('固定视角 (无拖拽)', 12, 12);
-        }
-
-        function refreshUI() {
-            drawFlat(currentState);
-            draw3D(currentState);
-            updateScrambleDisplay();
-            updateHistoryUI();
-        }
-
-        function updateScrambleDisplay() {
-            document.getElementById('scrambleDisplay').textContent =
-                currentScramble.length ? currentScramble.join(' ') : '(无打乱)';
-        }
-
-        // ============================================================
-        //  5. 计时器
-        // ============================================================
-        function updateTimerDisplay(val) {
-            document.getElementById('timerDisplay').textContent = val.toFixed(2);
-        }
-
-        function setTimerState(state) {
-            timerState = state;
-            const labels = { IDLE: '就绪', COUNTDOWN: '倒计时', RUNNING: '计时中', STOPPED: '已停止' };
-            document.getElementById('timerStateLabel').textContent = labels[state] || '就绪';
-            const btn = document.getElementById('timerBtn');
-            if (state === 'COUNTDOWN') btn.textContent = `⏳ ${Math.ceil(countdownValue)}s`;
-            else if (state === 'RUNNING') btn.textContent = '⏱️ 点击停止';
-            else if (state === 'STOPPED') btn.textContent = '🔄 重置';
-            else btn.textContent = '按住开始倒计时 (空格)';
-        }
-
-        function resetTimer() {
-            if (timerInterval) { clearInterval(timerInterval);
-                timerInterval = null; }
-            if (countdownInterval) { clearInterval(countdownInterval);
-                countdownInterval = null; }
-            timerValue = 0;
-            countdownValue = 15;
-            updateTimerDisplay(0);
-            setTimerState('IDLE');
-        }
-
-        function startCountdown() {
-            if (timerState === 'RUNNING') return;
-            resetTimer();
-            countdownValue = 15;
-            setTimerState('COUNTDOWN');
-            updateTimerDisplay(countdownValue);
-            countdownInterval = setInterval(() => {
-                countdownValue -= 0.1;
-                if (countdownValue <= 0) {
-                    countdownValue = 0;
-                    updateTimerDisplay(0);
-                    clearInterval(countdownInterval);
-                    countdownInterval = null;
-                    if (timerState === 'COUNTDOWN') startRunning();
-                } else {
-                    updateTimerDisplay(countdownValue);
-                    document.getElementById('timerBtn').textContent = `⏳ ${Math.ceil(countdownValue)}s`;
-                }
-            }, 100);
-        }
-
-        function startRunning() {
-            if (timerInterval) clearInterval(timerInterval);
-            if (countdownInterval) { clearInterval(countdownInterval);
-                countdownInterval = null; }
-            timerValue = 0;
-            timerStartTime = performance.now();
-            setTimerState('RUNNING');
-            timerInterval = setInterval(() => {
-                timerValue = (performance.now() - timerStartTime) / 1000;
-                updateTimerDisplay(timerValue);
-            }, 50);
-        }
-
-        function stopTimer() {
-            if (timerInterval) { clearInterval(timerInterval);
-                timerInterval = null; }
-            if (countdownInterval) { clearInterval(countdownInterval);
-                countdownInterval = null; }
-            setTimerState('STOPPED');
-            if (timerValue > 0 && currentScramble.length > 0) {
-                saveHistory(timerValue, currentScramble.join(' '));
-                generateNewScramble();
-            } else {
-                resetTimer();
-            }
-        }
-
-        // ============================================================
-        //  6. 历史记录 (Cookie)
-        // ============================================================
-        function getCookie(name) {
-            const c = document.cookie.split('; ').find(row => row.startsWith(name + '='));
-            return c ? decodeURIComponent(c.split('=')[1]) : null;
-        }
-
-        function setCookie(name, val, days = 365) {
-            const d = new Date();
-            d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
-            document.cookie = name + '=' + encodeURIComponent(val) + '; expires=' + d.toUTCString() + '; path=/';
-        }
-
-        function loadHistory() {
-            const data = getCookie('cubeHistory');
-            history = data ? JSON.parse(data) : [];
-            history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            if (history.length > 200) history = history.slice(-200);
-            updateHistoryUI();
-        }
-
-        function saveHistory(time, scramble) {
-            history.push({ time: Math.round(time * 100) / 100, scramble, timestamp: Date.now() });
-            if (history.length > 200) history = history.slice(-200);
-            setCookie('cubeHistory', JSON.stringify(history));
-            updateHistoryUI();
-        }
-
-        function deleteHistory(idx) {
-            history.splice(idx, 1);
-            setCookie('cubeHistory', JSON.stringify(history));
-            updateHistoryUI();
-        }
-
-        function clearHistory() {
-            if (confirm('确定清空所有成绩记录吗？')) {
-                history = [];
-                setCookie('cubeHistory', JSON.stringify(history));
-                updateHistoryUI();
-            }
-        }
-
-        function getStats(range) {
-            const list = history.map(e => e.time);
-            let filtered = range === 'all' ? list : list.slice(-parseInt(range));
-            if (filtered.length === 0) return { count: 0, avg: null, best: null };
-            const sum = filtered.reduce((a, b) => a + b, 0);
-            return { count: filtered.length, avg: sum / filtered.length, best: Math.min(...filtered) };
-        }
-
-        function updateHistoryUI() {
-            const range = document.getElementById('statsRange').value;
-            const stats = getStats(range);
-            document.getElementById('statCount').textContent = stats.count;
-            document.getElementById('statAvg').textContent = stats.avg !== null ? stats.avg.toFixed(2) : '--';
-            document.getElementById('statBest').textContent = stats.best !== null ? stats.best.toFixed(2) : '--';
-            const listEl = document.getElementById('historyList');
-            if (history.length === 0) {
-                listEl.innerHTML = '<div style="padding:12px;text-align:center;opacity:0.4;">暂无记录</div>';
-                return;
-            }
-            let html = '';
-            const show = history.slice(-100).reverse();
-            for (let i = 0; i < show.length; i++) {
-                const idx = history.length - 1 - i;
-                const e = show[i];
-                html += `<div class="history-item">
-                    <span>${e.time.toFixed(2)}s  ${e.scramble ? e.scramble.slice(0, 30) : ''}</span>
-                    <span class="del" data-idx="${idx}">✕</span>
-                </div>`;
-            }
-            listEl.innerHTML = html;
-            listEl.querySelectorAll('.del').forEach(el => {
-                el.addEventListener('click', function() {
-                    deleteHistory(parseInt(this.dataset.idx));
-                });
-            });
-        }
-
-        // ============================================================
-        //  7. 打乱 & 重置
-        // ============================================================
-        function generateNewScramble() {
-            const len = parseInt(document.getElementById('scrambleLen').value);
-            const moves = generateScramble(len);
-            currentScramble = moves;
-            let s = createInitState();
-            for (const m of moves) s = applyMove(s, m);
-            currentState = s;
-            playMoves = [];
-            playIndex = 0;
-            stopPlayback();
-            refreshUI();
-            if (timerState === 'STOPPED' || timerState === 'IDLE') resetTimer();
-        }
-
-        function resetCube() {
-            currentState = createInitState();
-            currentScramble = [];
-            playMoves = [];
-            playIndex = 0;
-            stopPlayback();
-            resetTimer();
-            refreshUI();
-        }
-
-        // ============================================================
-        //  8. 播放器 (打乱逆序)
-        // ============================================================
-        function buildPlayback() {
-            if (currentScramble.length === 0) return;
-            const reversed = [...currentScramble].reverse();
-            playMoves = reversed.map(m => {
-                if (m.includes('2')) return m;
-                if (m.includes("'")) return m.replace("'", '');
-                return m + "'";
-            });
-            playIndex = 0;
-            document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
-            let s = createInitState();
-            for (const m of currentScramble) s = applyMove(s, m);
-            currentState = s;
-            refreshUI();
-        }
-
-        function playStep(delta) {
-            if (playMoves.length === 0) return;
-            const newIdx = Math.max(0, Math.min(playMoves.length, playIndex + delta));
-            if (newIdx === playIndex) return;
-            let s = cloneState(currentState);
-            if (newIdx > playIndex) {
-                for (let i = playIndex; i < newIdx; i++) s = applyMove(s, playMoves[i]);
-            } else {
-                for (let i = playIndex - 1; i >= newIdx; i--) {
-                    const inv = playMoves[i].includes("'") ? playMoves[i].replace("'", '') :
-                        playMoves[i].includes("2") ? playMoves[i] : playMoves[i] + "'";
-                    s = applyMove(s, inv);
-                }
-            }
-            currentState = s;
-            playIndex = newIdx;
-            document.getElementById('playStepIndicator').textContent = `${playIndex} / ${playMoves.length}`;
-            refreshUI();
-        }
-
-        function togglePlayback() {
-            if (isPlaying) { stopPlayback(); return; }
-            if (playMoves.length === 0) buildPlayback();
-            if (playMoves.length === 0) return;
-            if (playIndex >= playMoves.length) {
-                playIndex = 0;
-                let s = createInitState();
-                for (const m of currentScramble) s = applyMove(s, m);
-                currentState = s;
-                refreshUI();
-                document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
-            }
-            isPlaying = true;
-            document.getElementById('playToggleBtn').textContent = '⏸';
-            const speed = parseInt(document.getElementById('playSpeedRange').value);
-            playInterval = setInterval(() => {
-                if (playIndex >= playMoves.length) { stopPlayback(); return; }
-                playStep(1);
-                if (playIndex >= playMoves.length) stopPlayback();
-            }, speed);
-        }
-
-        function stopPlayback() {
-            isPlaying = false;
-            if (playInterval) { clearInterval(playInterval);
-                playInterval = null; }
-            document.getElementById('playToggleBtn').textContent = '▶';
-        }
-
-        function goToFirst() {
-            stopPlayback();
-            if (playMoves.length === 0) buildPlayback();
-            if (playMoves.length === 0) return;
-            let s = createInitState();
-            for (const m of currentScramble) s = applyMove(s, m);
-            currentState = s;
-            playIndex = 0;
-            document.getElementById('playStepIndicator').textContent = `0 / ${playMoves.length}`;
-            refreshUI();
-        }
-
-        function goToLast() {
-            stopPlayback();
-            if (playMoves.length === 0) buildPlayback();
-            if (playMoves.length === 0) return;
-            let s = createInitState();
-            for (const m of currentScramble) s = applyMove(s, m);
-            for (const m of playMoves) s = applyMove(s, m);
-            currentState = s;
-            playIndex = playMoves.length;
-            document.getElementById('playStepIndicator').textContent = `${playIndex} / ${playMoves.length}`;
-            refreshUI();
-        }
-
-        // ============================================================
-        //  9. 配色
-        // ============================================================
-        function initColorPickers() {
-            const container = document.getElementById('colorPickerGroup');
-            container.innerHTML = '';
-            for (const name of FACES) {
-                const label = document.createElement('label');
-                label.innerHTML =
-                    `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${colorMap[name]};"></span> ${name}`;
-                const input = document.createElement('input');
-                input.type = 'color';
-                input.value = colorMap[name];
-                input.dataset.face = name;
-                input.addEventListener('input', function() {
-                    colorMap[this.dataset.face] = this.value;
-                    refreshUI();
-                });
-                label.appendChild(input);
-                container.appendChild(label);
-            }
-        }
-
-        // ============================================================
-        //  10. 计时器事件
-        // ============================================================
-        function setupTimerEvents() {
-            const btn = document.getElementById('timerBtn');
-            document.addEventListener('keydown', (e) => {
-                if (e.key === ' ' || e.code === 'Space') { e.preventDefault();
-                    handleTimerPress(); }
-            });
-            document.addEventListener('keyup', (e) => {
-                if (e.key === ' ' || e.code === 'Space') { e.preventDefault();
-                    handleTimerRelease(); }
-            });
-            btn.addEventListener('mousedown', (e) => { e.preventDefault();
-                handleTimerPress(); });
-            btn.addEventListener('mouseup', (e) => { e.preventDefault();
-                handleTimerRelease(); });
-            btn.addEventListener('mouseleave', () => { if (timerState === 'COUNTDOWN') handleTimerRelease(); });
-            btn.addEventListener('touchstart', (e) => { e.preventDefault();
-                handleTimerPress(); }, { passive: false });
-            btn.addEventListener('touchend', (e) => { e.preventDefault();
-                handleTimerRelease(); }, { passive: false });
-            btn.addEventListener('touchcancel', () => { if (timerState === 'COUNTDOWN') handleTimerRelease(); });
-        }
-
-        function handleTimerPress() {
-            if (timerState === 'IDLE') { startCountdown(); } else if (timerState === 'RUNNING') { stopTimer(); } else if (
-                timerState === 'STOPPED') { resetTimer(); if (timerState === 'IDLE') startCountdown(); }
-        }
-
-        function handleTimerRelease() {
-            if (timerState === 'COUNTDOWN') {
-                if (countdownValue > 0) {
-                    if (countdownInterval) { clearInterval(countdownInterval);
-                        countdownInterval = null; }
-                    startRunning();
-                }
-            }
-        }
-
-        // ============================================================
-        //  11. 速度滑块
-        // ============================================================
-        document.getElementById('playSpeedRange').addEventListener('input', function() {
-            playSpeed = parseInt(this.value);
-            document.getElementById('playSpeedLabel').textContent = (playSpeed / 1000).toFixed(1) + 's';
-            if (isPlaying) { stopPlayback();
-                togglePlayback(); }
-        });
-
-        // ============================================================
-        //  12. 初始化
-        // ============================================================
-        function init() {
-            if (!selfTest()) {
-                document.getElementById('errorBanner').classList.remove('hidden');
-                return;
-            }
-            initColorPickers();
-            loadHistory();
-            generateNewScramble();
-
-            document.getElementById('genScrambleBtn').addEventListener('click', generateNewScramble);
-            document.getElementById('resetCubeBtn').addEventListener('click', resetCube);
-            document.getElementById('statsRange').addEventListener('change', updateHistoryUI);
-            document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
-
-            document.getElementById('playFirstBtn').addEventListener('click', goToFirst);
-            document.getElementById('playLastBtn').addEventListener('click', goToLast);
-            document.getElementById('playPrevBtn').addEventListener('click', () => { stopPlayback();
-                playStep(-1); });
-            document.getElementById('playNextBtn').addEventListener('click', () => { stopPlayback();
-                playStep(1); });
-            document.getElementById('playToggleBtn').addEventListener('click', togglePlayback);
-
-            setupTimerEvents();
-        }
-
-        window.onload = init;
-    </script>
+</script>
 </body>
 </html>
