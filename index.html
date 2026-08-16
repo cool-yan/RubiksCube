@@ -55,7 +55,9 @@
     <!-- 主交互区 -->
     <div class="panel" style="flex: 2; min-width: 320px;">
         <div class="timer-display" id="timeDisplay">0.000</div>
-        <p style="text-align: center; color: #aaa; font-size: 14px; margin-top: -10px; margin-bottom: 20px;">按住空格/屏幕 15 秒倒计时，松开开始计时，再按停止</p>
+        <p style="text-align: center; color: #aaa; font-size: 14px; margin-top: -10px; margin-bottom: 20px;">
+            快捷键：<span style="color:#ffeb3b">空格</span> 计时 | <span style="color:#ffeb3b">Enter</span> 播放/暂停 | <span style="color:#ffeb3b">R</span> 新打乱
+        </p>
         
         <div class="view-container">
             <div>
@@ -87,7 +89,7 @@
 
         <div class="controls">
             <button onclick="playStep(-1)" id="btnPrev">◀ 上一步</button>
-            <button onclick="toggleAutoPlay()" id="btnPlay">▶ 自动播放</button>
+            <button onclick="toggleAutoPlay()" id="btnPlay">▶ 自动播放 (Enter)</button>
             <button onclick="playStep(1)" id="btnNext">下一步 ▶</button>
         </div>
         <p style="text-align: center; font-size: 14px; color: #ccc;"><span id="stepLabel">还原步骤</span>: <span id="solveStepText">准备中</span></p>
@@ -114,7 +116,7 @@
                     <input type="color" id="colR" value="#ff0000" onchange="updateColors()" title="右(R)">
                 </div>
             </div>
-            <button class="primary" style="width: 100%;" onclick="generateNew()">生成新打乱</button>
+            <button class="primary" id="btnGen" style="width: 100%;" onclick="generateNew()">生成新打乱 (R)</button>
         </div>
 
         <div class="panel">
@@ -139,7 +141,7 @@ let currentScramble = [], solveSteps = [], solveIndex = 0;
 let cubeState = new Array(54).fill(0);
 let colors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#ffa500', '#0000ff'];
 let animMode = 'solve';
-let animSpeed = 1.0; // 动画速度倍率
+let animSpeed = 1.0;
 
 function updateSpeed() {
     animSpeed = parseFloat(document.getElementById('speedRange').value);
@@ -313,7 +315,6 @@ function applyTurn3D(face, modifier, instant = false, onComplete = null) {
         isAnimating = false;
         if (onComplete) onComplete();
     } else {
-        // 基础动画时长 250ms，除以当前速度倍率
         const duration = 250 / animSpeed; 
         const start = performance.now();
         function tween() {
@@ -395,11 +396,11 @@ function toggleAutoPlay() {
     const btn = document.getElementById('btnPlay');
     if (isAutoPlaying) {
         isAutoPlaying = false;
-        btn.innerText = "▶ 自动播放";
+        btn.innerText = "▶ 自动播放 (Enter)";
     } else {
         if(solveIndex >= solveSteps.length) return;
         isAutoPlaying = true;
-        btn.innerText = "⏸ 暂停";
+        btn.innerText = "⏸ 暂停 (Enter)";
         playNextAuto();
     }
 }
@@ -409,7 +410,6 @@ function playNextAuto() {
     if (solveIndex < solveSteps.length) {
         playStep(1, () => { 
             if (isAutoPlaying) {
-                // 步骤之间的停顿时间也随速度动态缩放（基础停顿 150ms）
                 let pauseTime = 150 / animSpeed;
                 setTimeout(playNextAuto, pauseTime); 
             }
@@ -422,17 +422,20 @@ function playNextAuto() {
 function generateNew() {
     if (isAnimating) return;
     isAutoPlaying = false;
-    document.getElementById('btnPlay').innerText = "▶ 自动播放";
+    document.getElementById('btnPlay').innerText = "▶ 自动播放 (Enter)";
     
     const len = parseInt(document.getElementById('scrambleLength').value);
     currentScramble = generateScramble(len);
     document.getElementById('scrambleText').innerText = currentScramble.join(" ");
     
     switchAnimMode();
+
+    // 核心修复：生成新打乱后，强行移交焦点，防止空格失效
+    document.getElementById('btnGen').blur();
 }
 
 /** -------------------------------------------------------------
- *  4. 计时器与数据持久化逻辑
+ *  4. 计时器与全局快捷键逻辑
  *  ------------------------------------------------------------- */
 let timerState = 'IDLE', startTime = 0, inspectTime = 0, timerInterval = null, records = [];
 
@@ -519,8 +522,30 @@ function handleInputUp(e) {
     }
 }
 
-window.addEventListener('keydown', (e) => { if(e.code==='Space') { e.preventDefault(); handleInputDown(e); } });
-window.addEventListener('keyup', handleInputUp);
+// 统一键盘事件监听：空格（计时）、Enter（播放）、R（新打乱）
+window.addEventListener('keydown', (e) => {
+    // 如果焦点在输入框里，不拦截键盘快捷键
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+    if (e.code === 'Space') {
+        e.preventDefault();
+        handleInputDown(e);
+    } else if (e.code === 'Enter') {
+        e.preventDefault();
+        toggleAutoPlay();
+    } else if (e.code === 'KeyR') {
+        e.preventDefault();
+        generateNew();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.code === 'Space') {
+        handleInputUp(e);
+    }
+});
+
 const timeDisp = document.getElementById('timeDisplay');
 timeDisp.addEventListener('mousedown', handleInputDown); timeDisp.addEventListener('mouseup', handleInputUp);
 timeDisp.addEventListener('touchstart', (e) => { e.preventDefault(); handleInputDown(e); });
