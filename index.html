@@ -68,7 +68,8 @@
             </div>
             <div>
                 <h3>2D 展开图 (校验)</h3>
-                <canvas id="canvas2D" width="240" height="180" style="margin-top: 40px;"></canvas>
+                <!-- 修改画布大小以容纳标准的十字展开图 (4列 x 3行，每面大小 60px) -->
+                <canvas id="canvas2D" width="240" height="180" style="margin-top: 5px; background:#111;"></canvas>
             </div>
         </div>
 
@@ -134,14 +135,22 @@
 
 <script>
 /** -------------------------------------------------------------
- *  1. 底层核心算法层
+ *  1. 底层核心算法层 (面顺序：0:U, 1:R, 2:F, 3:D, 4:L, 5:B)
  *  ------------------------------------------------------------- */
 const FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
 let currentScramble = [], solveSteps = [], solveIndex = 0;
-let cubeState = new Array(54).fill(0);
+let cubeState = new Array(54);
 let colors = ['#ffffff', '#ff0000', '#00ff00', '#ffff00', '#ffa500', '#0000ff'];
 let animMode = 'solve';
 let animSpeed = 1.0;
+
+function resetSolvedState() {
+    for(let i=0; i<6; i++) {
+        for(let j=0; j<9; j++) {
+            cubeState[i*9 + j] = i;
+        }
+    }
+}
 
 function updateSpeed() {
     animSpeed = parseFloat(document.getElementById('speedRange').value);
@@ -162,20 +171,24 @@ function updateColors() {
     }
 }
 
+// 标准魔方单面旋转算法
 function rotateFace(face) {
     const f = face * 9;
     const temp = [cubeState[f], cubeState[f+1], cubeState[f+2], cubeState[f+5], cubeState[f+8], cubeState[f+7], cubeState[f+6], cubeState[f+3]];
     cubeState[f] = temp[6]; cubeState[f+1] = temp[7]; cubeState[f+2] = temp[0];
     cubeState[f+5] = temp[1]; cubeState[f+8] = temp[2]; cubeState[f+7] = temp[3];
     cubeState[f+6] = temp[4]; cubeState[f+3] = temp[5];
+    
+    // 邻边联动关系映射表
     const adj = {
-        0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], 
-        1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], 
-        2: [[0,6,7,8], [1,0,3,6], [3,2,1,0], [4,8,5,2]], 
-        3: [[2,6,7,8], [1,6,7,8], [5,6,7,8], [4,6,7,8]], 
-        4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], 
-        5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  
+        0: [[4,0,1,2], [5,0,1,2], [1,0,1,2], [2,0,1,2]], // U
+        1: [[0,8,5,2], [2,8,5,2], [3,8,5,2], [5,0,3,6]], // R
+        2: [[0,6,7,8], [1,0,3,6], [3,2,1,0], [4,8,5,2]], // F
+        3: [[2,6,7,8], [1,6,7,8], [5,6,7,8], [4,6,7,8]], // D
+        4: [[0,0,3,6], [2,0,3,6], [3,0,3,6], [5,8,5,2]], // L
+        5: [[0,2,1,0], [4,0,3,6], [3,6,7,8], [1,8,5,2]]  // B
     }[face];
+    
     let edgeTemp = [cubeState[adj[0][0]*9 + adj[0][1]], cubeState[adj[0][0]*9 + adj[0][2]], cubeState[adj[0][0]*9 + adj[0][3]]];
     for (let i = 0; i < 3; i++) {
         cubeState[adj[0][0]*9 + adj[0][i+1]] = cubeState[adj[3][0]*9 + adj[3][i+1]];
@@ -212,20 +225,34 @@ function generateScramble(length) {
 }
 
 /** -------------------------------------------------------------
- *  2. 渲染层 (2D + Three.js)
+ *  2. 渲染层：2D 展开图 (严格对齐标准的十字排布：上左前右后下)
  *  ------------------------------------------------------------- */
 const ctx2D = document.getElementById('canvas2D').getContext('2d');
 function render2D() {
     ctx2D.clearRect(0, 0, 240, 180);
-    const s = 45; 
-    const drawF = (f, ox, oy) => {
+    const size = 60; // 每个面 60x60 像素 (3x3格子，每格20px)
+    const sub = size / 3;
+
+    const drawFace = (faceIdx, startX, startY) => {
         for(let i=0; i<9; i++) {
-            ctx2D.fillStyle = colors[cubeState[f*9 + i]];
-            ctx2D.fillRect(ox + (i%3)*s/3, oy + Math.floor(i/3)*s/3, s/3-1, s/3-1);
+            let col = cubeState[faceIdx * 9 + i];
+            ctx2D.fillStyle = colors[col];
+            let x = startX + (i % 3) * sub;
+            let y = startY + Math.floor(i / 3) * sub;
+            ctx2D.fillRect(x + 1, y + 1, sub - 2, sub - 2);
         }
     };
-    drawF(0, s, 0);   drawF(4, 0, s);   drawF(2, s, s);
-    drawF(1, s*2, s); drawF(5, s*3, s); drawF(3, s, s*2);
+
+    // 标准十字展开图坐标位置 (列, 行)
+    // U (顶) 在第二列第一行
+    drawFace(0, size, 0);       
+    // L (左), F (前), R (右), B (后) 在第二行
+    drawFace(4, 0, size);       // L
+    drawFace(2, size, size);    // F
+    drawFace(1, size*2, size);  // R
+    drawFace(5, size*3, size);  // B
+    // D (底) 在第二列第三行
+    drawFace(3, size, size*2);  
 }
 
 let scene, camera, renderer, controls;
@@ -346,7 +373,7 @@ function switchAnimMode() {
     animMode = document.getElementById('animMode').value;
     solveIndex = 0;
     
-    for(let i=0; i<54; i++) cubeState[i] = Math.floor(i/9);
+    resetSolvedState();
     createCube3D();
 
     if (animMode === 'solve') {
@@ -429,13 +456,11 @@ function generateNew() {
     document.getElementById('scrambleText').innerText = currentScramble.join(" ");
     
     switchAnimMode();
-
-    // 核心修复：生成新打乱后，强行移交焦点，防止空格失效
     document.getElementById('btnGen').blur();
 }
 
 /** -------------------------------------------------------------
- *  4. 计时器与全局快捷键逻辑
+ *  4. 计时器与快捷键逻辑
  *  ------------------------------------------------------------- */
 let timerState = 'IDLE', startTime = 0, inspectTime = 0, timerInterval = null, records = [];
 
@@ -522,9 +547,7 @@ function handleInputUp(e) {
     }
 }
 
-// 统一键盘事件监听：空格（计时）、Enter（播放）、R（新打乱）
 window.addEventListener('keydown', (e) => {
-    // 如果焦点在输入框里，不拦截键盘快捷键
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
     if (e.code === 'Space') {
