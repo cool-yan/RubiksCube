@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USB 摄像头低延迟预览</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #111;
+    color: #eee;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 { font-size: 18px; margin-bottom: 12px; font-weight: 500; }
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  select, button {
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  button {
+    background: #2a6df5;
+    border: none;
+    cursor: pointer;
+  }
+  button:active { background: #1e54c2; }
+  #video-wrap {
+    width: 100%;
+    max-width: 960px;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+  video {
+    width: 100%;
+    display: block;
+  }
+  #stats {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #9a9;
+    font-family: monospace;
+  }
+  #status {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #f88;
+    min-height: 18px;
+  }
+</style>
+</head>
+<body>
+
+<h1>USB 摄像头预览（低延迟模式）</h1>
+
+<div id="controls">
+  <select id="cameraSelect"></select>
+  <select id="resSelect">
+    <option value="1920x1080">1920 x 1080</option>
+    <option value="1280x720">1280 x 720</option>
+    <option value="3840x2160">3840 x 2160 (4K，视摄像头支持)</option>
+    <option value="640x480">640 x 480（最低延迟）</option>
+  </select>
+  <button id="startBtn">启动摄像头</button>
+</div>
+
+<div id="video-wrap">
+  <video id="preview" autoplay playsinline muted></video>
+</div>
+
+<div id="stats">分辨率: -- | 帧率: -- fps</div>
+<div id="status"></div>
+
+<script>
+const video = document.getElementById('preview');
+const cameraSelect = document.getElementById('cameraSelect');
+const resSelect = document.getElementById('resSelect');
+const startBtn = document.getElementById('startBtn');
+const stats = document.getElementById('stats');
+const statusEl = document.getElementById('status');
+
+let currentStream = null;
+
+// 枚举可用摄像头设备
+async function listCameras() {
+  try {
+    // 先申请一次权限，否则 label 可能为空
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop());
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+    cameraSelect.innerHTML = '';
+    cams.forEach((cam, i) => {
+      const opt = document.createElement('option');
+      opt.value = cam.deviceId;
+      opt.textContent = cam.label || `摄像头 ${i + 1}`;
+      cameraSelect.appendChild(opt);
+    });
+    if (cams.length === 0) {
+      statusEl.textContent = '未检测到摄像头设备';
+    }
+  } catch (err) {
+    statusEl.textContent = '无法获取摄像头列表: ' + err.message;
+  }
+}
+
+async function startCamera() {
+  statusEl.textContent = '';
+  if (currentStream) {
+    currentStream.getTracks().forEach(t => t.stop());
+  }
+
+  const [w, h] = resSelect.value.split('x').map(Number);
+  const deviceId = cameraSelect.value;
+
+  const constraints = {
+    video: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      width: { ideal: w },
+      height: { ideal: h },
+      frameRate: { ideal: 60, min: 30 }
+    },
+    audio: false
+  };
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    currentStream = stream;
+    video.srcObject = stream;
+
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    stats.textContent = `分辨率: ${settings.width}x${settings.height} | 帧率: ${settings.frameRate ? settings.frameRate.toFixed(0) : '--'} fps`;
+  } catch (err) {
+    statusEl.textContent = '启动失败: ' + err.message + '（检查分辨率是否被摄像头支持，或权限是否允许）';
+  }
+}
+
+startBtn.addEventListener('click', startCamera);
+
+// 页面加载时先列出设备（需要用户手势触发权限请求，所以放在按钮点击后也可以更保险）
+listCameras();
+</script>
+
+</body>
+</html>
